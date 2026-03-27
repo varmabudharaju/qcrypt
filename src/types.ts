@@ -1,0 +1,44 @@
+export type RiskLevel = 'CRITICAL' | 'WARNING' | 'INFO' | 'OK';
+
+export type AlgorithmCategory = 'asymmetric' | 'symmetric' | 'hash' | 'protocol';
+
+export interface Finding {
+  file: string;
+  line: number;
+  algorithm: string;
+  category: AlgorithmCategory;
+  risk: RiskLevel;
+  snippet: string;
+  explanation: string;
+  replacement: string;
+}
+
+export interface ScanReport {
+  path: string;
+  scannedAt: string;
+  filesScanned: number;
+  findings: Finding[];
+  summary: { critical: number; warning: number; info: number; ok: number };
+  grade: 'A' | 'B' | 'C' | 'D' | 'F';
+}
+
+export interface AlgorithmRule {
+  id: string;
+  name: string;
+  risk: RiskLevel;
+  category: AlgorithmCategory;
+}
+
+export interface PatternMatch {
+  algorithm: string;
+  line: number;
+  snippet: string;
+}
+
+export interface LanguagePatterns {
+  extensions: string[];
+  patterns: Array<{
+    algorithm: string;
+    regex: RegExp;
+  }>;
+}
