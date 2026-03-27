@@ -36,7 +36,7 @@ program
       }
 
       if (report.summary.critical > 0) {
-        process.exit(1);
+        process.exitCode = 1;
       }
     } catch (err) {
       console.error(`Error: ${err instanceof Error ? err.message : err}`);
