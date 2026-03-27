@@ -10,8 +10,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli.ts",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts",
+    "build:web": "cd web && npm run build",
     "serve": "tsx src/api/server.ts"
   },
   "keywords": [
