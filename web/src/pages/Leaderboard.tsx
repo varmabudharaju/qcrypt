@@ -14,7 +14,6 @@ export function Leaderboard() {
     getScans().then(setScans).catch(() => {});
   }, []);
 
-  const totalFiles = scans.reduce((acc, s) => acc + s.filesScanned, 0);
   const totalVulnerable = scans.reduce((acc, s) => acc + s.summary.critical + s.summary.warning, 0);
   const pqcTransitions = scans.reduce((acc, s) => acc + s.summary.ok, 0);
   const overallScore = scans.length > 0
