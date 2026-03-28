@@ -5,7 +5,8 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "qcrypt-bench": "dist/cli.js"
+    "qcrypt-bench": "dist/cli.js",
+    "qcrypt-migrate": "dist/migrate/cli.js"
   },
   "scripts": {
     "build": "tsc",
