@@ -12,7 +12,8 @@
     "dev": "tsx src/cli.ts",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
-    "serve": "tsx src/api/server.ts"
+    "serve": "tsx src/api/server.ts",
+    "build:web": "cd web && npm run build"
   },
   "dependencies": {
     "@fastify/static": "^9.0.0",
