@@ -1,0 +1,30 @@
+{
+  "name": "qcrypt-bench",
+  "version": "0.1.0",
+  "description": "Benchmark classical crypto and compare with post-quantum alternatives",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "qcrypt-bench": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts",
+    "serve": "tsx src/api/server.ts",
+    "build:web": "cd web && npm run build"
+  },
+  "dependencies": {
+    "@fastify/static": "^9.0.0",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
+    "fastify": "^5.8.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.9"
+  }
+}
