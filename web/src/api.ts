@@ -66,3 +66,64 @@ export function getReference(): Promise<{ results: BenchmarkResult[]; profiles: 
 export function healthCheck(): Promise<{ status: string }> {
   return fetchJson('/api/health');
 }
+
+// ── Migrate types ──
+
+export interface MigrateFinding {
+  file: string;
+  line: number;
+  algorithm: string;
+  category: string;
+  risk: string;
+  snippet: string;
+  explanation: string;
+  replacement: string;
+}
+
+export interface MigrationStep {
+  finding: MigrateFinding;
+  priority: 'immediate' | 'short-term' | 'long-term';
+  action: string;
+  codeExample: string;
+  dependencies: string[];
+  effort: 'low' | 'medium' | 'high';
+  notes: string;
+}
+
+export interface MigrationPlan {
+  id: string;
+  generatedAt: string;
+  scanReport: {
+    id: string;
+    path: string;
+    scannedAt: string;
+    filesScanned: number;
+    findings: MigrateFinding[];
+    summary: { critical: number; warning: number; info: number; ok: number };
+    grade: string;
+  };
+  steps: MigrationStep[];
+  summary: { immediate: number; shortTerm: number; longTerm: number };
+  estimatedEffort: string;
+}
+
+// ── Migrate API ──
+
+export function generateMigratePlan(
+  path?: string,
+  scanReport?: MigrationPlan['scanReport'],
+): Promise<MigrationPlan> {
+  return fetchJson('/api/migrate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, scanReport }),
+  });
+}
+
+export function getMigrateHistory(): Promise<MigrationPlan[]> {
+  return fetchJson('/api/migrate/history');
+}
+
+export function getMigratePlan(id: string): Promise<MigrationPlan> {
+  return fetchJson(`/api/migrate/${id}`);
+}

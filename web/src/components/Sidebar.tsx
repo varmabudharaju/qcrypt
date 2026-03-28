@@ -4,6 +4,7 @@ const links = [
   { to: '/', label: 'Dashboard' },
   { to: '/comparison', label: 'Comparison' },
   { to: '/education', label: 'Education' },
+  { to: '/migrate', label: 'Migrate' },
 ];
 
 export default function Sidebar() {
