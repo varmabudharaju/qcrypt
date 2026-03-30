@@ -1,11 +1,11 @@
-# qcrypt-migrate — Handoff Document
+# qcrypt — Handoff Document
 
-Start a new session with: **"let's build qcrypt-migrate"** and I'll pick up right where we left off.
+Start a new session with: **"let's build the multi-project dashboard"** and I'll pick up right where we left off.
 
 ## What exists
 
-**Repo:** https://github.com/varmabudharaju/qcrypt (renamed from qcrypt-scan)
-**Branch:** `master` (synced with remote `main`)
+**Repo:** https://github.com/varmabudharaju/qcrypt
+**Branch:** `feat/qcrypt-migrate` (PR #2 open against `main`)
 **Working directory:** `/Users/varma/qcrypt-bench`
 
 ### qcrypt-bench (tool 2 — complete)
@@ -13,34 +13,41 @@ Start a new session with: **"let's build qcrypt-migrate"** and I'll pick up righ
 - CLI: `npx tsx src/cli.ts` with `--iterations`, `--category`, `--json`, `--serve`
 - API: Fastify on port 3200 with bench, history, reference endpoints
 - Web UI: React + Vite + Tailwind with Dashboard, Comparison, Education pages
-- All classical crypto benchmarks + NIST PQC reference data + 5 educational comparisons
 
 ### qcrypt-scan (tool 1 — separate repo)
 - Lives at `/Users/varma/qcrypt-scan`
 - Scans codebases for quantum-vulnerable crypto
-- Produces `ScanReport` with `Finding[]` (algorithm, file, line, snippet, risk, replacement guidance)
-- Supports JS/TS, Python, Go, Rust, Java/Kotlin + certificates, configs, dependencies
+- Added as `file:../qcrypt-scan` dependency in qcrypt-bench
+
+### qcrypt-migrate (tool 3 — complete, on feat/qcrypt-migrate branch)
+- 84 new tests (150 total), all passing
+- CLI: `npx tsx src/migrate/cli.ts` with `--scan-file`, `--json`, `--markdown`, `--serve`, `[path]`
+- API: POST /api/migrate, GET history, GET by id, GET /api/browse (folder browser)
+- Web UI: Migrate page with folder browser, scan summary card (grade badge, risk bar), expandable step cards, markdown download
+- Code examples for JS/TS, Python, Go, Rust, Java/Kotlin with fallback chains
+- Phased prioritization: immediate (CRITICAL), short-term (WARNING), long-term (INFO)
 
 ## What to build next
 
-**qcrypt-migrate (tool 3)** — Migration guide generator
+**Phase 1: Multi-Project Security Dashboard**
 
 ### Design spec (approved)
-`docs/superpowers/specs/2026-03-27-qcrypt-migrate-design.md`
+`docs/superpowers/specs/2026-03-29-multi-project-dashboard-design.md`
 
 ### Key decisions already made
-1. **Migration guide generator** — does NOT transform code, produces actionable migration plans
-2. **Dual input** — accepts scan JSON file OR runs scan internally (convenience mode)
-3. **Triple output** — terminal, markdown, JSON (consistent with scan and bench)
-4. **Integrated web UI** — adds Migrate page to existing bench sidebar, not a separate app
-5. **Language-aware code examples** — JS/TS, Python, Go, Rust, Java/Kotlin with specific PQC library recommendations
-6. **Phased prioritization** — immediate (CRITICAL), short-term (WARNING), long-term (INFO)
+1. **SQLite via better-sqlite3** — persistent storage in `~/.qcrypt/qcrypt.db`
+2. **Auto-create projects** — scanning a path creates the project, no manual setup
+3. **Overview dashboard as home** — org-level stats (total projects, worst grade, critical count) + project cards grid with trend sparklines
+4. **Project detail page** — scan history chart, latest scan summary, migration steps
+5. **Sidebar reorganized** — Overview (home), Benchmark (renamed from Dashboard), Comparison, Education
+6. **Migrate page absorbed** — becomes part of project detail, not standalone
 
 ### Next step
-Invoke the **writing-plans** skill to create the implementation plan from the spec, then execute with subagent-driven development (same approach used for bench).
+Invoke the **writing-plans** skill to create the implementation plan from the spec, then execute with subagent-driven development.
 
 ### Important notes
-- Sole contributor: varmabudharaju (no Co-Authored-By trailers)
+- Sole contributor: varmabudharaju
 - Push to `origin main` via PR, squash merge
-- qcrypt-scan needs to be available as a local import for the scan integration — either symlink, npm link, or copy the scan function
-- Extend existing `src/api/server.ts` and `web/src/` rather than creating new apps
+- The existing `/api/migrate` endpoint stays for CLI backward compatibility
+- New API: `/api/projects`, `/api/projects/:id`, `/api/projects/:id/scan`, `/api/scan`, `/api/overview`
+- New source: `src/db/index.ts`, `src/db/projects.ts`, `src/db/scans.ts`
