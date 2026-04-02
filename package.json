@@ -1,6 +1,6 @@
 {
   "name": "qcrypt-scan",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Scan codebases for quantum-vulnerable cryptography",
   "type": "module",
   "main": "dist/index.js",
