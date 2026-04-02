@@ -1,79 +1,104 @@
 import { describe, it, expect } from 'vitest';
-import { formatTerminal } from '../../src/reporters/terminal.js';
-import type { ScanReport } from '../../src/types.js';
+import { formatTerminal } from '../src/reporters/terminal.js';
+import type { ScanReport } from '../src/types.js';
 
-describe('terminal reporter', () => {
-  const report: ScanReport = {
-    path: '/test/project',
-    scannedAt: '2026-03-27T00:00:00.000Z',
-    filesScanned: 5,
-    findings: [
-      {
-        file: 'auth.py',
-        line: 10,
-        algorithm: 'RSA',
-        category: 'asymmetric',
-        risk: 'CRITICAL',
-        snippet: 'rsa.generate_private_key(...)',
-        explanation: 'RSA is broken.',
-        replacement: 'Use ML-KEM.',
+const makeReport = (overrides?: Partial<ScanReport>): ScanReport => ({
+  id: 'test-id',
+  path: './test-project',
+  scannedAt: '2026-04-02T00:00:00.000Z',
+  filesScanned: 100,
+  findings: [
+    {
+      file: 'src/auth.ts',
+      line: 42,
+      algorithm: 'RSA',
+      category: 'asymmetric',
+      risk: 'CRITICAL',
+      snippet: 'rsa.generateKey()',
+      explanation: 'Broken by Shor',
+      replacement: 'ML-KEM',
+    },
+  ],
+  enrichedFindings: [
+    {
+      file: 'src/auth.ts',
+      line: 42,
+      algorithm: 'RSA',
+      category: 'asymmetric',
+      risk: 'CRITICAL',
+      snippet: 'rsa.generateKey()',
+      explanation: 'Broken by Shor',
+      replacement: 'ML-KEM',
+      context: {
+        sensitivity: 'high',
+        hndlRisk: true,
+        isTestFile: false,
+        migrationEffort: 'high',
       },
-      {
-        file: 'utils.py',
-        line: 5,
-        algorithm: 'MD5',
-        category: 'hash',
-        risk: 'WARNING',
-        snippet: 'hashlib.md5(data)',
-        explanation: 'MD5 is weak.',
-        replacement: 'Use SHA-3.',
-      },
-    ],
-    summary: { critical: 1, warning: 1, info: 0, ok: 0 },
-    grade: 'C',
-  };
+    },
+  ],
+  summary: { critical: 1, warning: 0, info: 0, ok: 0 },
+  grade: 'C',
+  readiness: {
+    overall: 34,
+    dimensions: {
+      vulnerability: { score: 92, weighted: 36.8, details: '1 critical' },
+      priority: { score: 56, weighted: 14, details: '1 HNDL' },
+      migration: { score: 0, weighted: 0, details: 'No PQC' },
+      agility: { score: 100, weighted: 15, details: '1 file' },
+    },
+  },
+  ...overrides,
+});
 
-  it('includes the grade', () => {
-    const output = formatTerminal(report);
-    expect(output).toContain('C');
+describe('formatTerminal', () => {
+  it('displays readiness score', () => {
+    const output = formatTerminal(makeReport());
+    expect(output).toContain('PQC Readiness');
+    expect(output).toContain('34');
   });
 
-  it('includes file paths and line numbers', () => {
-    const output = formatTerminal(report);
-    expect(output).toContain('auth.py');
-    expect(output).toContain('10');
+  it('displays dimension scores', () => {
+    const output = formatTerminal(makeReport());
+    expect(output).toContain('Vulnerability');
+    expect(output).toContain('Priority');
+    expect(output).toContain('Migration');
+    expect(output).toContain('Agility');
   });
 
-  it('includes algorithm names', () => {
-    const output = formatTerminal(report);
-    expect(output).toContain('RSA');
-    expect(output).toContain('MD5');
+  it('shows HNDL warning when key exchange vulns present', () => {
+    const output = formatTerminal(makeReport());
+    expect(output).toContain('HARVEST');
   });
 
-  it('includes summary counts', () => {
-    const output = formatTerminal(report);
-    expect(output).toContain('1');
+  it('shows enriched finding context', () => {
+    const output = formatTerminal(makeReport());
+    expect(output).toContain('HNDL');
+    expect(output).toContain('HIGH');
   });
 
-  it('includes explanations', () => {
+  it('does not show HNDL warning when no key exchange vulns', () => {
+    const report = makeReport({
+      enrichedFindings: [
+        {
+          file: 'src/auth.ts',
+          line: 42,
+          algorithm: 'ECDSA',
+          category: 'asymmetric',
+          risk: 'CRITICAL',
+          snippet: 'ecdsa.sign()',
+          explanation: 'Broken',
+          replacement: 'ML-DSA',
+          context: {
+            sensitivity: 'high',
+            hndlRisk: false,
+            isTestFile: false,
+            migrationEffort: 'medium',
+          },
+        },
+      ],
+    });
     const output = formatTerminal(report);
-    expect(output).toContain('RSA is broken');
-  });
-
-  it('includes replacements', () => {
-    const output = formatTerminal(report);
-    expect(output).toContain('ML-KEM');
-  });
-
-  it('handles empty findings', () => {
-    const emptyReport: ScanReport = {
-      ...report,
-      findings: [],
-      summary: { critical: 0, warning: 0, info: 0, ok: 0 },
-      grade: 'A',
-    };
-    const output = formatTerminal(emptyReport);
-    expect(output).toContain('A');
-    expect(output).toContain('quantum-safe');
+    expect(output).not.toContain('HARVEST');
   });
 });
