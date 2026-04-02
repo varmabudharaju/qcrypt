@@ -78,3 +78,19 @@ export function createServer() {
 
   return app;
 }
+
+// Start server only when this file is run directly (not imported as a module)
+const isMain =
+  process.argv[1] != null &&
+  fileURLToPath(import.meta.url).endsWith(process.argv[1].replace(/\\/g, '/'));
+
+if (isMain) {
+  const app = createServer();
+  app.listen({ port: 3000, host: '0.0.0.0' }, (err, address) => {
+    if (err) {
+      console.error(err);
+      process.exit(1);
+    }
+    console.log(`Server listening at ${address}`);
+  });
+}

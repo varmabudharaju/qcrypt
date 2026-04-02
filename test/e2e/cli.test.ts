@@ -33,7 +33,9 @@ describe('E2E: CLI', () => {
   it('reports grade A for safe fixtures', () => {
     const output = run('test/fixtures/safe --json');
     const parsed = JSON.parse(output);
-    expect(parsed.grade).toBe('A');
+    // Safe fixtures score B (80/100) under readiness-based grading because
+    // the migration dimension scores 0 (no PQC adoption detected yet).
+    expect(parsed.grade).toBe('B');
     expect(parsed.summary.critical).toBe(0);
   });
 

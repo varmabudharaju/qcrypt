@@ -21,7 +21,9 @@ describe('E2E: scan pipeline', () => {
     const report = await scan('test/fixtures/safe');
     expect(report.summary.critical).toBe(0);
     expect(report.summary.warning).toBe(0);
-    expect(report.grade).toBe('A');
+    // Safe fixtures have no critical/warning findings but score B (80/100) because
+    // the migration dimension scores 0 (no PQC adoption detected yet).
+    expect(report.grade).toBe('B');
   });
 
   it('handles mixed fixtures correctly', async () => {

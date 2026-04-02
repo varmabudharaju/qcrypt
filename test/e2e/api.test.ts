@@ -51,6 +51,8 @@ describe('E2E: API', () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.grade).toBe('A');
+    // Safe fixtures score B (80/100) under readiness-based grading because
+    // the migration dimension scores 0 (no PQC adoption detected yet).
+    expect(body.grade).toBe('B');
   });
 });
