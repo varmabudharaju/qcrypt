@@ -4,3 +4,20 @@ dist/
 .DS_Store
 web/node_modules/
 web/dist/
+
+# IDE / tooling
+.claude/
+.superpowers/
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+
+# Data
+*.db
+*.db-shm
+*.db-wal

@@ -1,4 +1,0 @@
-{"type":"server-started","port":60383,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:60383","screen_dir":"/Users/varma/qcrypt-scan/.superpowers/brainstorm/25000-1775074513/content","state_dir":"/Users/varma/qcrypt-scan/.superpowers/brainstorm/25000-1775074513/state"}
-{"type":"screen-added","file":"/Users/varma/qcrypt-scan/.superpowers/brainstorm/25000-1775074513/content/chart-concepts.html"}
-{"type":"screen-added","file":"/Users/varma/qcrypt-scan/.superpowers/brainstorm/25000-1775074513/content/waiting.html"}
-{"type":"server-stopped","reason":"idle timeout"}
