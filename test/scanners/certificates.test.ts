@@ -14,7 +14,7 @@ MIIBkTCB+wIJALHLzNJKjhDsMAoGCCqGSM49BAMCMBQxEjAQBgNVBAMMCWxvY2Fs
 describe('certificate scanner', () => {
   it('detects RSA in PEM certificate', () => {
     const findings = scanCertificateFile('server.crt', rsaCert);
-    expect(findings.some((f) => f.algorithm === 'RSA' && f.risk === 'CRITICAL')).toBe(true);
+    expect(findings.some((f) => f.algorithm.startsWith('RSA') && f.risk === 'CRITICAL')).toBe(true);
   });
 
   it('detects EC in PEM certificate', () => {
@@ -25,7 +25,7 @@ describe('certificate scanner', () => {
   it('detects RSA private key headers', () => {
     const pem = '-----BEGIN RSA PRIVATE KEY-----\ndata\n-----END RSA PRIVATE KEY-----';
     const findings = scanCertificateFile('key.pem', pem);
-    expect(findings.some((f) => f.algorithm === 'RSA')).toBe(true);
+    expect(findings.some((f) => f.algorithm.startsWith('RSA'))).toBe(true);
   });
 
   it('detects EC private key headers', () => {

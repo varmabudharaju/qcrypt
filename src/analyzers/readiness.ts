@@ -15,12 +15,18 @@ function computeVulnerabilityScore(
 
   for (const f of findings) {
     if (f.context.isTestFile) continue;
+    if (f.usageType === 'comment') continue;
+
+    // Imports/references have reduced impact on score
+    const weight = f.usageType === 'import' ? 0.3
+      : f.usageType === 'reference' ? 0.5
+      : 1.0;
 
     if (f.risk === 'CRITICAL') {
-      const deduction = clamp(400 / Math.max(filesScanned, 1), 3, 8);
+      const deduction = clamp(400 / Math.max(filesScanned, 1), 3, 8) * weight;
       raw -= deduction;
     } else if (f.risk === 'WARNING') {
-      const deduction = clamp(100 / Math.max(filesScanned, 1), 1, 3);
+      const deduction = clamp(100 / Math.max(filesScanned, 1), 1, 3) * weight;
       raw -= deduction;
     }
   }

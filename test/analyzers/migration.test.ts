@@ -33,7 +33,7 @@ describe('computeMigrationScore', () => {
       makeFinding('ML-KEM', 'OK'),
     ];
     const result = computeMigrationScore(findings);
-    expect(result.score).toBe(35);
+    expect(result.score).toBe(45);
   });
 
   it('gives hybrid bonus when PQC and classical coexist in same file', () => {
@@ -79,6 +79,6 @@ describe('computeMigrationScore', () => {
       makeFinding('ML-KEM', 'OK'),
     ];
     const result = computeMigrationScore(findings);
-    expect(result.weighted).toBe(7);
+    expect(result.weighted).toBe(9);
   });
 });

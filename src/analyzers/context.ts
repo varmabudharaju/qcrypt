@@ -9,12 +9,16 @@ const LOW_SENSITIVITY_DIRS = [
   '/test/', '/tests/', '/__tests__/', '/spec/',
   '/mock/', '/mocks/', '/fixture/', '/fixtures/',
   '/example/', '/examples/', '/demo/', '/benchmark/', '/e2e/',
+  '/testing/', '/testdata/', '/testutils/',
+  '/integration/', '/resources/',
 ];
 
 const TEST_FILE_PATTERNS = [
-  /\/test\//, /\/tests\//, /\/__tests__\//,
-  /\/spec\//, /\/mock\//, /\/mocks\//,
-  /\/fixture\//, /\/fixtures\//,
+  /(?:^|\/)test\//, /(?:^|\/)tests\//, /(?:^|\/)__tests__\//,
+  /(?:^|\/)spec\//, /(?:^|\/)mock\//, /(?:^|\/)mocks\//,
+  /(?:^|\/)fixture\//, /(?:^|\/)fixtures\//,
+  /(?:^|\/)testing\//, /(?:^|\/)testdata\//, /(?:^|\/)testutils\//,
+  /(?:^|\/)integration\//, /(?:^|\/)resources\//,
   /\.test\.\w+$/, /\.spec\.\w+$/,
   /_test\.\w+$/, /_spec\.\w+$/,
 ];

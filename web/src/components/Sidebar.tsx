@@ -1,54 +1,75 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 
-const navItems = [
-  { to: '/', label: 'Dashboard', icon: '⊞' },
-  { to: '/scans', label: 'Scans', icon: '◎' },
-  { to: '/leaderboard', label: 'Leaderboard', icon: '⊟' },
-  { to: '/docs', label: 'Docs', icon: '⊡' },
+interface NavItem {
+  to: string;
+  label: string;
+  icon: string;
+  end?: boolean;
+}
+
+const navItems: NavItem[] = [
+  { to: '/', label: 'DASHBOARD', icon: 'dashboard', end: true },
+  { to: '/projects', label: 'PROJECTS', icon: 'folder_open' },
+  { to: '/migration', label: 'MIGRATION', icon: 'conversion_path' },
+  { to: '/compliance', label: 'COMPLIANCE', icon: 'verified_user' },
+  { to: '/benchmarks', label: 'BENCHMARKS', icon: 'speed' },
 ];
 
 export function Sidebar() {
+  const navigate = useNavigate();
+
   return (
-    <aside className="w-56 h-screen fixed left-0 top-0 flex flex-col border-r border-slate-200 dark:border-[#1a1a1a] bg-white dark:bg-[#0a0a0a] z-10">
-      {/* Logo */}
-      <div className="p-5 border-b border-slate-200 dark:border-[#1a1a1a]">
-        <h1 className="text-lg font-bold text-slate-800 dark:text-[#00FF41] tracking-tight">
-          qcrypt-scan
+    <aside className="w-56 h-screen fixed left-0 top-0 flex flex-col bg-surface-container-low z-20">
+      {/* Branding */}
+      <div className="px-4 pt-5 pb-4">
+        <h1 className="font-mono text-lg font-bold text-primary-container text-glow tracking-tight">
+          QC-SENTRY
         </h1>
-        <p className="text-xs text-slate-400 dark:text-[#666666] mt-0.5 uppercase tracking-widest">
-          Quantum Sentry
+        <p className="font-mono text-[10px] text-on-surface-variant tracking-[0.2em] uppercase mt-0.5">
+          LEVEL 4 CLEARANCE
         </p>
       </div>
 
+      {/* Divider line (tonal shift, not a border) */}
+      <div className="h-px bg-surface-container-high mx-4" />
+
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 px-3 pt-4 space-y-0.5">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.to === '/'}
+            end={item.end}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              `flex items-center gap-2.5 px-3 py-2 font-mono text-xs font-medium tracking-wider transition-all ${
                 isActive
-                  ? 'bg-blue-50 text-blue-600 dark:bg-[#00FF41]/10 dark:text-[#00FF41]'
-                  : 'text-slate-600 hover:bg-slate-100 dark:text-[#999999] dark:hover:bg-[#1a1a1a]'
+                  ? 'bg-primary-container text-on-primary shadow-neon-sm'
+                  : 'text-on-surface-variant hover:bg-surface-container hover:text-primary'
               }`
             }
           >
-            <span className="text-base">{item.icon}</span>
+            <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
             {item.label}
           </NavLink>
         ))}
       </nav>
 
-      {/* New Scan Button */}
-      <div className="p-4">
-        <NavLink
-          to="/"
-          className="block w-full py-2.5 px-4 text-center text-sm font-semibold rounded-lg bg-blue-500 text-white hover:bg-blue-600 dark:bg-[#00FF41] dark:text-black dark:hover:bg-[#00dd38] transition-colors"
+      {/* Scan button */}
+      <div className="p-3">
+        <button
+          onClick={() => navigate('/')}
+          className="btn-neon w-full py-2.5 px-4 text-xs flex items-center justify-center gap-2"
         >
-          + New Scan
-        </NavLink>
+          <span className="material-symbols-outlined text-[16px]">radar</span>
+          NEW SCAN
+        </button>
+      </div>
+
+      {/* Footer version */}
+      <div className="px-4 pb-3">
+        <p className="font-mono text-[9px] text-on-surface-variant/50 tracking-wider">
+          QCS v0.2.0 // NIST PQC
+        </p>
       </div>
     </aside>
   );

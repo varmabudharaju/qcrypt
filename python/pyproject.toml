@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qcrypt-scan"
+version = "0.2.0"
+description = "Scan codebases for quantum-vulnerable cryptography"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    {name = "Varma Budharaju", email = "varma@qcrypt.dev"},
+]
+keywords = [
+    "quantum", "cryptography", "post-quantum", "security",
+    "scanner", "pqc", "nist", "shor", "grover",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+    "Topic :: Security :: Cryptography",
+]
+
+[project.urls]
+Homepage = "https://github.com/varmabudharaju/qcrypt-scan"
+Repository = "https://github.com/varmabudharaju/qcrypt-scan"
+Issues = "https://github.com/varmabudharaju/qcrypt-scan/issues"
+
+[project.scripts]
+qcrypt-scan = "qcrypt_scan.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]

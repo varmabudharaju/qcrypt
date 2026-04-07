@@ -1,0 +1,120 @@
+name: 'qcrypt-scan'
+description: 'Scan for quantum-vulnerable cryptography on every PR. Diff-aware — only flags new findings.'
+author: 'varmabudharaju'
+branding:
+  icon: 'shield'
+  color: 'green'
+
+inputs:
+  fail-on:
+    description: 'Fail if new findings at this level: critical, warning, any'
+    required: false
+    default: 'critical'
+  path:
+    description: 'Path to scan (relative to repo root)'
+    required: false
+    default: '.'
+  github-token:
+    description: 'GitHub token for PR comments'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  grade:
+    description: 'PQC readiness grade (A-F)'
+    value: ${{ steps.diff.outputs.grade }}
+  new-findings:
+    description: 'Number of new findings introduced by this PR'
+    value: ${{ steps.diff.outputs.new-findings }}
+  resolved-findings:
+    description: 'Number of findings resolved by this PR'
+    value: ${{ steps.diff.outputs.resolved-findings }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    # Scan PR branch
+    - name: Scan PR branch
+      shell: bash
+      run: |
+        npx qcrypt-scan@latest ${{ inputs.path }} --json > /tmp/qcrypt-pr.json 2>/dev/null || true
+
+    # Scan base branch
+    - name: Checkout base branch
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.base.sha }}
+        clean: false
+        path: __qcrypt_base
+
+    - name: Scan base branch
+      shell: bash
+      run: |
+        npx qcrypt-scan@latest __qcrypt_base/${{ inputs.path }} --json > /tmp/qcrypt-base.json 2>/dev/null || true
+        rm -rf __qcrypt_base
+
+    # Compute diff
+    - name: Compute diff
+      id: diff
+      shell: bash
+      run: |
+        DIFF_JSON=$(npx qcrypt-scan@latest ci diff --pr /tmp/qcrypt-pr.json --base /tmp/qcrypt-base.json --fail-on ${{ inputs.fail-on }} 2>/dev/null || true)
+        COMMENT=$(npx qcrypt-scan@latest ci diff --pr /tmp/qcrypt-pr.json --base /tmp/qcrypt-base.json --github-comment 2>/dev/null || true)
+
+        # Extract outputs
+        echo "grade=$(echo "$DIFF_JSON" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); console.log(d.gradeChange || 'unchanged')")" >> $GITHUB_OUTPUT
+        echo "new-findings=$(echo "$DIFF_JSON" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); console.log(d.newFindings)")" >> $GITHUB_OUTPUT
+        echo "resolved-findings=$(echo "$DIFF_JSON" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')); console.log(d.resolvedFindings)")" >> $GITHUB_OUTPUT
+
+        # Save comment for next step
+        echo "$COMMENT" > /tmp/qcrypt-comment.md
+
+    # Post PR comment
+    - name: Post PR comment
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require('fs');
+          const comment = fs.readFileSync('/tmp/qcrypt-comment.md', 'utf-8');
+
+          // Find existing comment to update (avoid spam)
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          const existing = comments.find(c =>
+            c.body.includes('qcrypt-scan') && c.body.includes('Quantum Crypto Audit')
+          );
+
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body: comment,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment,
+            });
+          }
+
+    # Check result
+    - name: Check for new vulnerabilities
+      shell: bash
+      run: |
+        npx qcrypt-scan@latest ci diff \
+          --pr /tmp/qcrypt-pr.json \
+          --base /tmp/qcrypt-base.json \
+          --fail-on ${{ inputs.fail-on }}

@@ -63,12 +63,15 @@ function matchDeps(filePath: string, depNames: string[], rules: DepRule[]): Find
       if (!algo || algo.risk === 'OK') continue;
 
       const education = getExplanation(algoId);
+      // Dependency-inferred findings are INFO — they indicate library presence,
+      // not confirmed active usage of the algorithm
       findings.push({
         file: filePath,
         line: 1,
         algorithm: algoId,
         category: algo.category,
-        risk: algo.risk,
+        risk: 'INFO',
+        usageType: 'import',
         snippet: `Dependency includes ${algoId} via ${rule.description}`,
         explanation: education.explanation,
         replacement: education.replacement,
@@ -79,8 +82,12 @@ function matchDeps(filePath: string, depNames: string[], rules: DepRule[]): Find
   return findings;
 }
 
+// Track which directories have already had Go deps scanned (go.mod takes priority over go.sum)
+const scannedGoDirs = new Set<string>();
+
 export function scanDependencyFile(filePath: string, content: string): Finding[] {
   const basename = path.basename(filePath);
+  const dir = path.dirname(filePath);
 
   switch (basename) {
     case 'package.json':
@@ -89,7 +96,12 @@ export function scanDependencyFile(filePath: string, content: string): Finding[]
     case 'Pipfile':
       return scanPipDeps(filePath, content);
     case 'go.mod':
+      scannedGoDirs.add(dir);
+      return scanGoDeps(filePath, content);
     case 'go.sum':
+      // Skip go.sum if go.mod already scanned for this directory
+      if (scannedGoDirs.has(dir)) return [];
+      scannedGoDirs.add(dir);
       return scanGoDeps(filePath, content);
     default:
       return [];

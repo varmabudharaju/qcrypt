@@ -1,0 +1,23 @@
+# Example: Add this to your repo's .github/workflows/ to scan PRs
+# See: https://github.com/varmabudharaju/qcrypt-scan
+
+name: Quantum Crypto Scan
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  qcrypt-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: varmabudharaju/qcrypt-scan@main
+        with:
+          fail-on: critical    # Fail PR if new critical findings
+          # path: '.'          # Scan root (default)
+          # github-token: ${{ secrets.GITHUB_TOKEN }}  # For PR comments (default)

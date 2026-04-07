@@ -19,7 +19,10 @@ export function applyConfigOverrides(
 ): EnrichedFinding[] {
   if (!config.sensitivity) return findings;
 
-  const { high = [], low = [], ignore = [] } = config.sensitivity;
+  const raw = config.sensitivity;
+  const high = Array.isArray(raw.high) ? raw.high : [];
+  const low = Array.isArray(raw.low) ? raw.low : [];
+  const ignore = Array.isArray(raw.ignore) ? raw.ignore : [];
 
   let result = findings.filter(
     (f) => !ignore.some((pattern) => minimatch(f.file, pattern)),

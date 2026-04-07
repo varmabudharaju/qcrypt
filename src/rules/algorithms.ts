@@ -36,7 +36,8 @@ const rules: AlgorithmRule[] = [
 const ruleMap = new Map(rules.map((r) => [r.id, r]));
 
 export function getAlgorithmRule(id: string): AlgorithmRule | undefined {
-  return ruleMap.get(id);
+  // Direct match first, then try base algorithm (e.g., RSA-2048 → RSA)
+  return ruleMap.get(id) ?? ruleMap.get(id.replace(/-\d+$/, ''));
 }
 
 export function getAllRules(): AlgorithmRule[] {

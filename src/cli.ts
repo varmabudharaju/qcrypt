@@ -6,22 +6,41 @@ import { formatJson } from './reporters/json.js';
 import { formatSarif } from './reporters/sarif.js';
 import { formatCbom } from './reporters/cbom.js';
 import { createServer } from './api/server.js';
+import { runBenchmarks } from './benchmarks/index.js';
+import { formatTerminal as formatBenchTerminal } from './reporters/bench-terminal.js';
+import { formatJson as formatBenchJson } from './reporters/bench-json.js';
+import { generateMigrationPlan } from './migrate/index.js';
+import { formatTerminal as formatMigrateTerminal } from './migrate/reporters/terminal.js';
+import { formatMarkdown } from './migrate/reporters/markdown.js';
+import { formatJson as formatMigrateJson } from './migrate/reporters/json.js';
+import { isGitHubUrl } from './github/scanner.js';
+import { runCI } from './ci/index.js';
+import { scaffoldWorkflow, getNextSteps } from './ci/init.js';
+import { GRADE_ORDER, type Grade } from './ci/exit.js';
+import type { BenchmarkCategory } from './types.js';
+import type { CIProvider } from './ci/detect.js';
+import { writeFileSync } from 'node:fs';
+
+const VALID_CATEGORIES: BenchmarkCategory[] = ['all', 'kex', 'sigs', 'sym', 'hash'];
 
 const program = new Command();
 
 program
   .name('qcrypt-scan')
-  .description('Scan codebases for quantum-vulnerable cryptography')
-  .version('0.2.0');
+  .description('Quantum cryptography scanner, benchmarking, and migration toolkit')
+  .version('0.2.0')
+  .option('--serve', 'start Quantum Sentry web UI')
+  .option('--port <number>', 'server port', '3100');
 
+// Default action: scan
 program
-  .argument('[path]', 'path to scan', '.')
+  .argument('[path]', 'path or GitHub URL to scan', '.')
   .option('--json', 'output as JSON')
-  .option('--sarif', 'output as SARIF 2.1.0 (for GitHub Security)')
+  .option('--sarif', 'output as SARIF 2.1.0')
   .option('--cbom', 'output as CycloneDX 1.6 CBOM')
   .option('--config <path>', 'path to .qcrypt.yml config file')
-  .option('--serve', 'start API server')
-  .option('--port <number>', 'API server port', '3100')
+  .option('--ci', 'run in CI mode with structured output')
+  .option('--fail-on <grade>', 'fail if grade is this or worse (A/B/C/D/F)')
   .action(async (
     targetPath: string,
     options: {
@@ -31,13 +50,66 @@ program
       config?: string;
       serve?: boolean;
       port?: string;
+      ci?: boolean;
+      failOn?: string;
     },
   ) => {
     if (options.serve) {
       const port = parseInt(options.port ?? '3100', 10);
+
+      // Kill any existing process on the port
+      try {
+        const { spawnSync } = await import('node:child_process');
+        const result = spawnSync('lsof', ['-ti', `:${port}`], { encoding: 'utf-8' });
+        const pid = result.stdout.trim();
+        if (pid && /^\d+$/.test(pid)) {
+          spawnSync('kill', [pid]);
+          // Brief wait for port to free up
+          await new Promise((r) => setTimeout(r, 300));
+        }
+      } catch {
+        // No process on port — that's fine
+      }
+
       const server = createServer();
       await server.listen({ port, host: '0.0.0.0' });
-      console.log(`qcrypt-scan API server running on http://localhost:${port}`);
+      console.log('');
+      console.log('  ⬡ Quantum Sentry is live');
+      console.log(`  ➜ Local:   http://localhost:${port}`);
+      const nets = Object.values(await import('node:os').then((m) => m.networkInterfaces())).flat().filter((n) => n && n.family === 'IPv4' && !n.internal);
+      if (nets.length > 0) {
+        console.log(`  ➜ Network: http://${nets[0]!.address}:${port}`);
+      }
+      console.log('');
+
+      // Keep process alive until interrupted
+      process.on('SIGINT', async () => {
+        await server.close();
+        process.exit(0);
+      });
+      process.on('SIGTERM', async () => {
+        await server.close();
+        process.exit(0);
+      });
+      // Block forever — the server event loop handles requests
+      await new Promise(() => {});
+      return;
+    }
+
+    // CI mode
+    if (options.ci) {
+      if (!options.failOn) {
+        console.error('Error: --fail-on is required with --ci');
+        process.exit(2);
+      }
+      const grade = options.failOn.toUpperCase() as Grade;
+      if (!GRADE_ORDER.includes(grade)) {
+        console.error(`Error: invalid grade "${options.failOn}". Must be one of: ${GRADE_ORDER.join(', ')}`);
+        process.exit(2);
+      }
+      const result = await runCI({ targetPath, failOn: grade, sarifPath: null });
+      console.log(JSON.stringify(result.summary, null, 2));
+      process.exit(result.exitCode);
       return;
     }
 
@@ -63,4 +135,133 @@ program
     }
   });
 
-program.parse();
+// bench subcommand
+program
+  .command('bench')
+  .description('Benchmark classical crypto and compare with post-quantum alternatives')
+  .option('--iterations <n>', 'number of iterations', '1000')
+  .option('--category <cat>', 'category: all, kex, sigs, sym, hash', 'all')
+  .option('--json', 'output as JSON')
+  .action((opts: { iterations: string; category: string; json?: boolean }) => {
+    const iterations = parseInt(opts.iterations, 10);
+    const category = opts.category as BenchmarkCategory;
+
+    if (!VALID_CATEGORIES.includes(category)) {
+      console.error(`Invalid category: ${category}. Must be one of: ${VALID_CATEGORIES.join(', ')}`);
+      process.exit(2);
+    }
+
+    const report = runBenchmarks({ iterations, category });
+
+    if (opts.json) {
+      console.log(formatBenchJson(report));
+    } else {
+      console.log(formatBenchTerminal(report));
+    }
+  });
+
+// migrate subcommand
+program
+  .command('migrate [path]')
+  .description('Generate a post-quantum migration plan')
+  .option('--json', 'output as JSON')
+  .option('--markdown', 'write migration-plan.md')
+  .action(async (targetPath: string = '.', opts: { json?: boolean; markdown?: boolean }) => {
+    try {
+      const report = await scan(targetPath);
+      const plan = generateMigrationPlan(report);
+
+      if (opts.json) {
+        console.log(formatMigrateJson(plan));
+      } else if (opts.markdown) {
+        const md = formatMarkdown(plan);
+        writeFileSync('migration-plan.md', md);
+        console.log('Written to migration-plan.md');
+      } else {
+        console.log(formatMigrateTerminal(plan));
+      }
+    } catch (err) {
+      console.error(`Error: ${err instanceof Error ? err.message : err}`);
+      process.exit(2);
+    }
+  });
+
+// ci subcommand
+const ciCmd = program
+  .command('ci')
+  .description('CI/CD integration tools');
+
+ciCmd
+  .command('init')
+  .description('Scaffold a CI workflow for quantum crypto scanning')
+  .requiredOption('--provider <provider>', 'CI provider: github, gitlab, generic')
+  .option('--force', 'overwrite existing workflow file')
+  .action((opts: { provider: string; force?: boolean }) => {
+    const provider = opts.provider.toLowerCase() as CIProvider;
+    if (!['github', 'gitlab', 'generic'].includes(provider)) {
+      console.error(`Error: unknown provider "${opts.provider}". Must be: github, gitlab, generic`);
+      process.exit(2);
+    }
+
+    const result = scaffoldWorkflow(provider, process.cwd(), opts.force ?? false);
+    if (!result.created) {
+      console.error(result.error);
+      process.exit(1);
+    }
+
+    console.log(`Created: ${result.filePath}`);
+    console.log();
+    console.log(getNextSteps(provider));
+  });
+
+ciCmd
+  .command('diff')
+  .description('Compare two scan results and report new/resolved findings')
+  .requiredOption('--pr <path>', 'path to PR scan JSON file')
+  .requiredOption('--base <path>', 'path to base scan JSON file')
+  .option('--fail-on <level>', 'fail if new findings at this level: critical, warning, any', 'critical')
+  .option('--github-comment', 'output as GitHub PR comment markdown')
+  .action(async (opts: { pr: string; base: string; failOn: string; githubComment?: boolean }) => {
+    const { readFileSync: readFile } = await import('node:fs');
+    const { diffScans, shouldFail } = await import('./ci/diff.js');
+    const { formatGitHubComment, formatCheckSummary } = await import('./ci/github-comment.js');
+
+    let prReport, baseReport;
+    try {
+      prReport = JSON.parse(readFile(opts.pr, 'utf-8'));
+      baseReport = JSON.parse(readFile(opts.base, 'utf-8'));
+    } catch (err) {
+      console.error(`Error reading scan files: ${err instanceof Error ? err.message : err}`);
+      process.exit(2);
+    }
+
+    const diff = diffScans(baseReport, prReport);
+
+    if (opts.githubComment) {
+      console.log(formatGitHubComment(diff));
+    } else {
+      console.log(JSON.stringify({
+        newFindings: diff.newFindings.length,
+        resolvedFindings: diff.resolvedFindings.length,
+        unchangedCount: diff.unchangedCount,
+        gradeChange: diff.gradeChanged ? `${diff.baseGrade} → ${diff.prGrade}` : null,
+        summary: formatCheckSummary(diff),
+        findings: diff.newFindings,
+      }, null, 2));
+    }
+
+    const failLevel = opts.failOn as 'critical' | 'warning' | 'any';
+    if (!['critical', 'warning', 'any'].includes(failLevel)) {
+      console.error(`Invalid --fail-on value: ${opts.failOn}. Must be: critical, warning, any`);
+      process.exit(2);
+    }
+
+    if (shouldFail(diff, failLevel)) {
+      process.exit(1);
+    }
+  });
+
+program.parseAsync().catch((err) => {
+  console.error(err);
+  process.exit(2);
+});

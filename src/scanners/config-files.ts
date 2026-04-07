@@ -58,6 +58,7 @@ export function scanConfigFile(filePath: string, content: string): Finding[] {
           algorithm: pattern.algorithm,
           category: pattern.category,
           risk: pattern.risk,
+          usageType: 'config',
           snippet: line.trim(),
           explanation: education.explanation,
           replacement: education.replacement,

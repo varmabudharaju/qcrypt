@@ -1,99 +1,219 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../theme';
-import { scanPath, getScans, type ScanReport } from '../api';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { scanPath, getOverview, getProjects } from '../api';
+import type { OverviewStats, ProjectWithLatestScan } from '../api';
 import { StatsCard } from '../components/StatsCard';
-import { ScanTable } from '../components/ScanTable';
+
+const LOG_LINES = [
+  '> QUANTUM_AUDIT_ENGINE initialized',
+  '> Loading NIST PQC reference database...',
+  '> FIPS 203 (ML-KEM) patterns loaded',
+  '> FIPS 204 (ML-DSA) patterns loaded',
+  '> FIPS 205 (SLH-DSA) patterns loaded',
+  '> Shor vulnerability scanner: ACTIVE',
+  '> Grover vulnerability scanner: ACTIVE',
+  '> HNDL threat model: ENABLED',
+  '> Compliance frameworks: CNSA 2.0, FIPS 140-3, PCI DSS 4.0',
+  '> System ready. Awaiting target designation.',
+];
+
+const GRADE_COLORS: Record<string, string> = {
+  A: 'bg-primary-container text-on-primary',
+  B: 'bg-secondary text-on-primary',
+  C: 'bg-tertiary-fixed-dim text-on-tertiary-fixed',
+  D: 'bg-error/80 text-on-error',
+  F: 'bg-error text-on-error',
+};
 
 export function Dashboard() {
-  const { theme } = useTheme();
   const navigate = useNavigate();
   const [path, setPath] = useState('');
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState('');
-  const [scans, setScans] = useState<ScanReport[]>([]);
+  const [overview, setOverview] = useState<OverviewStats | null>(null);
+  const [projects, setProjects] = useState<ProjectWithLatestScan[]>([]);
+  const [logLines, setLogLines] = useState<string[]>([]);
 
   useEffect(() => {
-    getScans().then(setScans).catch(() => {});
+    getOverview().then(setOverview).catch((e) => setError(e instanceof Error ? e.message : 'Failed to load overview'));
+    getProjects().then(setProjects).catch((e) => setError(e instanceof Error ? e.message : 'Failed to load projects'));
   }, []);
 
-  const handleScan = async () => {
+  // Animate log lines
+  useEffect(() => {
+    let idx = 0;
+    let cancelled = false;
+    const interval = setInterval(() => {
+      if (cancelled) return;
+      const line = LOG_LINES[idx];
+      if (line !== undefined) {
+        setLogLines((prev) => [...prev, line]);
+        idx++;
+      } else {
+        clearInterval(interval);
+      }
+    }, 300);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  const handleScan = useCallback(async () => {
     if (!path.trim()) return;
     setScanning(true);
     setError('');
+    setLogLines((prev) => [...prev, `> Initiating scan: ${path.trim()}`]);
     try {
-      const report = await scanPath(path.trim());
-      setScans((prev) => [report, ...prev]);
-      navigate(`/scans/${report.id}`);
+      const res = await scanPath(path.trim());
+      setLogLines((prev) => [...prev, '> Scan complete. Rendering results...']);
+      navigate(`/scans/${res.scan.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Scan failed');
+      const msg = err instanceof Error ? err.message : 'Scan failed';
+      setError(msg);
+      setLogLines((prev) => [...prev, `> ERROR: ${msg}`]);
     } finally {
       setScanning(false);
     }
-  };
+  }, [path, navigate]);
 
-  const totalScanned = scans.reduce((acc, s) => acc + s.filesScanned, 0);
-  const totalVulnerabilities = scans.reduce((acc, s) => acc + s.summary.critical + s.summary.warning, 0);
-  const pqcReadiness = scans.length > 0
-    ? Math.round((scans.filter((s) => s.grade === 'A' || s.grade === 'B').length / scans.length) * 100)
-    : 100;
+  const threatLevel = overview
+    ? Math.min(100, Math.round((overview.totalCritical / Math.max(overview.totalScans, 1)) * 100))
+    : 0;
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
+    <div className="space-y-8 max-w-6xl">
+      {/* Hero */}
       <div>
-        <h1 className="text-3xl font-bold text-slate-800 dark:text-[#e0e0e0]">
-          {theme === 'dark' ? 'Initiate Quantum Audit' : 'Security Posture.'}
+        <p className="font-mono text-[10px] text-on-surface-variant tracking-[0.3em] uppercase mb-2">
+          POST-QUANTUM CRYPTOGRAPHIC AUDIT
+        </p>
+        <h1 className="font-headline text-4xl font-bold text-primary uppercase tracking-tight">
+          INITIATE QUANTUM AUDIT
         </h1>
-        <p className="text-slate-500 dark:text-[#666666] mt-1">
-          Audit your repositories for Post-Quantum Cryptography readiness.
+        <p className="text-on-surface-variant mt-2 max-w-xl">
+          Scan any repository for quantum-vulnerable cryptographic primitives. Get remediation plans aligned with NIST PQC standards.
         </p>
       </div>
 
       {/* Scan Input */}
-      <div className="bg-white dark:bg-[#111111] rounded-xl border border-slate-200 dark:border-[#1a1a1a] p-6">
+      <div className="bg-surface-container-low p-6">
         <div className="flex gap-3">
           <input
             type="text"
             value={path}
             onChange={(e) => setPath(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleScan()}
-            placeholder="/path/to/your/project"
+            placeholder="/path/to/project or https://github.com/org/repo"
             disabled={scanning}
-            className="flex-1 px-4 py-3 rounded-lg border border-slate-300 dark:border-[#2a2a2a] bg-slate-50 dark:bg-[#0a0a0a] text-slate-800 dark:text-[#e0e0e0] placeholder-slate-400 dark:placeholder-[#666666] focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00FF41] focus:border-transparent text-sm"
+            className="flex-1 px-4 py-3 bg-surface-container-lowest text-primary font-mono text-sm placeholder-on-surface-variant/50 focus:outline-none focus:ring-1 focus:ring-primary-container/50 border-none"
           />
           <button
             onClick={handleScan}
             disabled={scanning || !path.trim()}
-            className="px-6 py-3 rounded-lg bg-blue-500 dark:bg-[#00FF41] text-white dark:text-black font-semibold text-sm hover:bg-blue-600 dark:hover:bg-[#00dd38] disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+            className="btn-neon px-8 py-3 text-xs whitespace-nowrap"
           >
-            {scanning ? 'Scanning...' : 'Scan Repository'}
+            {scanning ? 'SCANNING...' : 'RUN_ANALYSIS'}
           </button>
         </div>
         {error && (
-          <p className="mt-3 text-sm text-red-500">{error}</p>
+          <p className="mt-3 font-mono text-xs text-error">{error}</p>
         )}
-        <p className="mt-2 text-xs text-slate-400 dark:text-[#666666]">
-          Supports local directories. Enter an absolute path to scan.
+        <p className="mt-2 font-mono text-[10px] text-on-surface-variant/60 tracking-wider">
+          SUPPORTS LOCAL DIRECTORIES AND GITHUB URLS
         </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <StatsCard label="Total Scanned" value={totalScanned.toLocaleString()} />
-        <StatsCard label="Vulnerabilities Found" value={totalVulnerabilities} color={totalVulnerabilities > 0 ? 'red' : 'default'} />
-        <StatsCard label="PQC Readiness" value={`${pqcReadiness}%`} color="green" />
+      {/* Stats Grid */}
+      <div className="grid grid-cols-3 gap-px bg-surface-container-high">
+        <StatsCard
+          label="Global Threat Level"
+          value={`${threatLevel}%`}
+          accentColor={threatLevel > 50 ? 'error' : threatLevel > 20 ? 'warning' : 'neon'}
+          subtitle="Avg critical findings per scan"
+        />
+        <StatsCard
+          label="Total Scans"
+          value={overview?.totalScans ?? 0}
+          accentColor="neon"
+          subtitle="Scans executed"
+        />
+        <StatsCard
+          label="Projects Monitored"
+          value={overview?.totalProjects ?? 0}
+          accentColor="default"
+          subtitle="Ecosystem coverage"
+        />
       </div>
 
-      {/* Recent Scans */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-[#e0e0e0]">Recent Intelligence</h2>
-          {scans.length > 0 && (
-            <span className="text-sm text-slate-400 dark:text-[#666666]">View all scans</span>
-          )}
+      {/* Recent Intelligence */}
+      {projects.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-mono text-xs text-on-surface-variant tracking-[0.2em] uppercase">
+              RECENT_INTELLIGENCE
+            </h2>
+            <Link to="/projects" className="font-mono text-xs text-primary-container hover:text-primary-fixed transition-colors">
+              VIEW ALL &gt;
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-surface-container-high">
+            {projects.slice(0, 6).map((proj) => (
+              <Link
+                key={proj.id}
+                to={`/projects/${proj.id}`}
+                className="bg-surface-container-low p-4 hover:bg-surface-container transition-colors group"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-mono text-sm font-semibold text-primary truncate group-hover:text-primary-container transition-colors">
+                      {proj.name}
+                    </p>
+                    <p className="font-mono text-[10px] text-on-surface-variant/60 mt-0.5 truncate">
+                      {proj.path}
+                    </p>
+                  </div>
+                  {proj.latestScan && (
+                    <span className={`font-mono text-xs font-bold px-2 py-1 ${GRADE_COLORS[proj.latestScan.grade] ?? 'bg-surface-container-high text-on-surface-variant'}`}>
+                      {proj.latestScan.grade}
+                    </span>
+                  )}
+                </div>
+                {proj.latestScan && (
+                  <div className="flex items-center gap-3 font-mono text-[10px]">
+                    {proj.latestScan.summary.critical > 0 && (
+                      <span className="text-error">{proj.latestScan.summary.critical} CRIT</span>
+                    )}
+                    {proj.latestScan.summary.warning > 0 && (
+                      <span className="text-tertiary-fixed-dim">{proj.latestScan.summary.warning} WARN</span>
+                    )}
+                    <span className="text-on-surface-variant/50">
+                      {new Date(proj.latestScan.scannedAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                )}
+              </Link>
+            ))}
+          </div>
         </div>
-        <ScanTable scans={scans} />
+      )}
+
+      {/* Live Forensic Feed */}
+      <div>
+        <h2 className="font-mono text-xs text-on-surface-variant tracking-[0.2em] uppercase mb-3">
+          LIVE_FORENSIC_FEED
+        </h2>
+        <div className="terminal-log p-4 h-48 overflow-y-auto">
+          {logLines.map((line, i) => {
+            const text = line ?? '';
+            return (
+              <div key={i} className={`${text.includes('ERROR') ? 'text-error' : text.includes('ACTIVE') || text.includes('ENABLED') ? 'text-primary-container' : ''}`}>
+                {text}
+              </div>
+            );
+          })}
+          {scanning && (
+            <div className="text-primary-container animate-pulse">&gt; Processing...</div>
+          )}
+          <div className="text-primary-container">_</div>
+        </div>
       </div>
     </div>
   );

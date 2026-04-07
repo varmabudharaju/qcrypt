@@ -26,7 +26,7 @@ export function computeMigrationScore(findings: EnrichedFinding[]): DimensionSco
 
   let hybridFiles = 0;
   for (const [file, entry] of fileAlgorithms.entries()) {
-    if (entry.hasPqc && entry.hasClassical && file !== 'src/app.ts') {
+    if (entry.hasPqc && entry.hasClassical) {
       hybridFiles++;
     }
   }

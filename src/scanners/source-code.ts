@@ -20,9 +20,11 @@ export function scanSourceFile(filePath: string, content: string): Finding[] {
         algorithm: match.algorithm,
         category: rule.category,
         risk: rule.risk,
+        usageType: match.usageType,
         snippet: match.snippet,
         explanation: education.explanation,
         replacement: education.replacement,
+        ...(match.keySize != null ? { keySize: match.keySize } : {}),
       };
     })
     .filter((f): f is Finding => f !== null);

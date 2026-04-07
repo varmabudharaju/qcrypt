@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import type { ScanReport, RiskLevel } from '../types.js';
+import { computeDeadlineStatus } from '../reference/nist-deadlines.js';
 
 const riskColors: Record<RiskLevel, (s: string) => string> = {
   CRITICAL: chalk.red.bold,
@@ -33,6 +34,21 @@ export function formatTerminal(report: ScanReport): string {
   lines.push('');
   lines.push(`  ${chalk.dim('Path:')}    ${report.path}`);
   lines.push(`  ${chalk.dim('Files:')}   ${report.filesScanned} scanned`);
+
+  // Language coverage warning
+  const lc = report.languageCoverage;
+  if (lc && lc.unsupportedExtensions.length > 0) {
+    const dominant = lc.unsupportedExtensions[0];
+    const totalSource = lc.scanned + lc.skipped;
+    const pct = Math.round((lc.skipped / totalSource) * 100);
+    if (pct > 30) {
+      lines.push('');
+      lines.push(chalk.yellow.bold('  !! COVERAGE WARNING'));
+      const extList = lc.unsupportedExtensions.map((e) => `${e.count} ${e.ext}`).join(', ');
+      lines.push(chalk.yellow(`  ${pct}% of files use unsupported languages (${extList})`));
+      lines.push(chalk.yellow('  Results reflect scanned files only. Actual crypto posture may differ.'));
+    }
+  }
   lines.push('');
 
   // Grade + Readiness
@@ -52,6 +68,19 @@ export function formatTerminal(report: ScanReport): string {
     `${chalk.blue('INFO')}: ${report.summary.info}  ` +
     `${chalk.green('OK')}: ${report.summary.ok}`,
   );
+
+  // Usage breakdown
+  const ub = report.usageBreakdown;
+  const ubParts: string[] = [];
+  if (ub.operations > 0) ubParts.push(chalk.red.bold(`${ub.operations} active operations`));
+  if (ub.keyMaterial > 0) ubParts.push(chalk.red(`${ub.keyMaterial} key material`));
+  if (ub.config > 0) ubParts.push(chalk.yellow(`${ub.config} config`));
+  if (ub.imports > 0) ubParts.push(chalk.dim(`${ub.imports} imports/deps`));
+  if (ub.references > 0) ubParts.push(chalk.dim(`${ub.references} references`));
+  if (ub.comments > 0) ubParts.push(chalk.dim.italic(`${ub.comments} comments (excluded)`));
+  if (ubParts.length > 0) {
+    lines.push(`    ${chalk.dim('Breakdown:')} ${ubParts.join(chalk.dim(' · '))}`);
+  }
   lines.push('');
 
   // HNDL Warning
@@ -66,15 +95,81 @@ export function formatTerminal(report: ScanReport): string {
     lines.push('');
   }
 
+  // Quantum Threat Analysis
+  const qs = report.quantumSummary;
+  if (qs && qs.threats.length > 0) {
+    lines.push(chalk.bold('  Quantum Threat Analysis'));
+    lines.push('');
+    if (qs.weakestLink) {
+      const wl = qs.weakestLink;
+      lines.push(`    ${chalk.red.bold('Weakest link:')} ${wl.algorithm}`);
+      lines.push(`    ${chalk.dim('Classical:')} ${wl.classicalBreakTime}`);
+      lines.push(`    ${chalk.red('Quantum:')}   ${wl.quantumBreakTime} ${chalk.dim('(' + wl.qubitsRequired + ')')}`);
+      lines.push(`    ${chalk.dim('Attack:')}    ${wl.quantumAlgorithm} — ${wl.speedup} speedup`);
+      lines.push(`    ${chalk.dim('Source:')}    ${wl.citation}`);
+      lines.push('');
+    }
+
+    const brokenQ = qs.threats.filter((t) => t.threatLevel === 'broken-quantum');
+    const weakened = qs.threats.filter((t) => t.threatLevel === 'weakened');
+    const safe = qs.threats.filter((t) => t.threatLevel === 'quantum-safe');
+
+    if (brokenQ.length > 0) {
+      lines.push(`    ${chalk.red('⬤')} ${chalk.red.bold('Broken by quantum')}  ${brokenQ.map((t) => t.algorithm).join(', ')}`);
+    }
+    if (weakened.length > 0) {
+      lines.push(`    ${chalk.yellow('◐')} ${chalk.yellow('Weakened')}            ${weakened.map((t) => t.algorithm).join(', ')}`);
+    }
+    if (safe.length > 0) {
+      lines.push(`    ${chalk.green('●')} ${chalk.green('Quantum-safe')}        ${safe.map((t) => t.algorithm).join(', ')}`);
+    }
+    lines.push('');
+  }
+
+  // NIST Compliance Deadline (production findings only)
+  const prodFindingsAll = report.enrichedFindings.filter((f) => !f.context.isTestFile);
+  const uniqueAlgos = [...new Set(prodFindingsAll.map((f) => f.algorithm))];
+  const deadlineStatuses = uniqueAlgos
+    .map((a) => ({ algo: a, status: computeDeadlineStatus(a) }))
+    .filter((d) => d.status !== null && d.status.status !== 'safe')
+    .sort((a, b) => (a.status!.yearsRemaining ?? -1) - (b.status!.yearsRemaining ?? -1));
+
+  if (deadlineStatuses.length > 0) {
+    lines.push(chalk.bold('  NIST Compliance Deadline'));
+    lines.push('');
+    for (const { algo, status } of deadlineStatuses) {
+      const ds = status!;
+      const icon = ds.status === 'overdue' ? chalk.red('✗')
+        : ds.status === 'urgent' ? chalk.yellow('!')
+        : chalk.dim('○');
+      const timeStr = ds.yearsRemaining === null
+        ? chalk.red('OVERDUE')
+        : ds.status === 'urgent'
+          ? chalk.yellow(`${ds.yearsRemaining}y remaining`)
+          : chalk.dim(`${ds.yearsRemaining}y remaining`);
+      const count = prodFindingsAll.filter((f) => f.algorithm === algo).length;
+      lines.push(`    ${icon} ${algo}: prohibited ${ds.deadline.prohibited} (${timeStr}) — ${count} finding${count !== 1 ? 's' : ''}`);
+    }
+    lines.push(`    ${chalk.dim('Source: ' + deadlineStatuses[0].status!.deadline.source)}`);
+    lines.push('');
+  }
+
   if (report.enrichedFindings.length === 0) {
-    lines.push(chalk.green('  No quantum-vulnerable cryptography found. Your project appears quantum-safe!'));
+    const hasLowCoverage = lc && lc.unsupportedExtensions.length > 0 &&
+      lc.skipped / (lc.scanned + lc.skipped) > 0.3;
+    if (hasLowCoverage) {
+      lines.push(chalk.dim('  No findings in scanned files. Unsupported languages were not analyzed.'));
+    } else {
+      lines.push(chalk.green('  No quantum-vulnerable cryptography found. Your project appears quantum-safe!'));
+    }
     lines.push('');
     return lines.join('\n');
   }
 
   // Findings (production files first, test files dimmed at end)
-  const prodFindings = report.enrichedFindings.filter((f) => !f.context.isTestFile);
-  const testFindings = report.enrichedFindings.filter((f) => f.context.isTestFile);
+  const prodFindings = report.enrichedFindings.filter((f) => !f.context.isTestFile && f.usageType !== 'comment');
+  const commentFindings = report.enrichedFindings.filter((f) => f.usageType === 'comment');
+  const testFindings = report.enrichedFindings.filter((f) => f.context.isTestFile && f.usageType !== 'comment');
 
   if (prodFindings.length > 0) {
     lines.push(chalk.bold('  Findings'));
@@ -82,7 +177,12 @@ export function formatTerminal(report: ScanReport): string {
 
     for (const finding of prodFindings) {
       const badge = riskColors[finding.risk](`[${finding.risk}]`);
-      lines.push(`  ${badge} ${chalk.bold(finding.algorithm)} in ${chalk.cyan(finding.file)}:${finding.line}`);
+      const usageTag = finding.usageType === 'operation' ? chalk.red(' ⬤ operation')
+        : finding.usageType === 'import' ? chalk.dim(' ○ import')
+        : finding.usageType === 'key-material' ? chalk.red(' ⬤ key-material')
+        : finding.usageType === 'config' ? chalk.yellow(' ◐ config')
+        : chalk.dim(' ○ reference');
+      lines.push(`  ${badge} ${chalk.bold(finding.algorithm)} in ${chalk.cyan(finding.file)}:${finding.line}${usageTag}`);
       lines.push(`    ${chalk.dim(finding.snippet)}`);
 
       // Context badges

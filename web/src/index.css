@@ -2,7 +2,147 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  min-height: 100vh;
+@layer base {
+  * {
+    border-radius: 0 !important;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: #131318;
+    color: #e4e1e9;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #131318;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #3c4b35;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #39ff14;
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgba(57, 255, 20, 0.25);
+    color: #efffe3;
+  }
+}
+
+@layer components {
+  /* Scanline overlay — static, no animation for performance */
+  .scanline-overlay {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(57, 255, 20, 0.012) 2px,
+      rgba(57, 255, 20, 0.012) 4px
+    );
+  }
+
+  /* CRT vignette */
+  .crt-vignette {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.3) 100%);
+  }
+
+  /* Neon glow text */
+  .text-glow {
+    text-shadow: 0 0 10px rgba(57, 255, 20, 0.5), 0 0 40px rgba(57, 255, 20, 0.15);
+  }
+
+  .text-glow-sm {
+    text-shadow: 0 0 6px rgba(57, 255, 20, 0.4);
+  }
+
+  /* Neon button */
+  .btn-neon {
+    background-color: #39ff14;
+    color: #053900;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: box-shadow 0.2s ease, background-color 0.2s ease;
+  }
+
+  .btn-neon:hover {
+    box-shadow: 0 0 15px rgba(57, 255, 20, 0.5), 0 0 30px rgba(57, 255, 20, 0.2);
+    background-color: #79ff5b;
+  }
+
+  .btn-neon:disabled {
+    opacity: 0.4;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  /* Terminal log area */
+  .terminal-log {
+    background-color: #0e0e13;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: #baccb0;
+  }
+
+  /* Stat value style */
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  /* Glass panel */
+  .glass-panel {
+    background: rgba(31, 31, 36, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Pulse dot */
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #39ff14;
+    box-shadow: 0 0 6px rgba(57, 255, 20, 0.6);
+    animation: pulse-neon 2s ease-in-out infinite;
+  }
+
+  /* Left border severity indicators */
+  .severity-critical { border-left: 3px solid #ffb4ab; }
+  .severity-warning { border-left: 3px solid #e7bdb8; }
+  .severity-info { border-left: 3px solid #85967c; }
+  .severity-ok { border-left: 3px solid #39ff14; }
+}
+
+@keyframes pulse-neon {
+  0%, 100% { box-shadow: 0 0 5px rgba(57, 255, 20, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(57, 255, 20, 0.6); }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
 }

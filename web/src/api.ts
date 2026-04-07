@@ -1,3 +1,27 @@
+/* ────────────────────────────────────────────
+   QC-SENTRY  //  API Client
+   ──────────────────────────────────────────── */
+
+const BASE = '/api';
+
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (init?.body) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const res = await fetch(`${BASE}${url}`, {
+    headers,
+    ...init,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || res.statusText);
+  }
+  return res.json();
+}
+
+/* ── Types ── */
+
 export interface Finding {
   file: string;
   line: number;
@@ -7,6 +31,45 @@ export interface Finding {
   snippet: string;
   explanation: string;
   replacement: string;
+  quantumThreat?: string;
+  hndlRisk?: boolean;
+  usageType?: 'operation' | 'import' | 'key-material' | 'config' | 'reference' | 'comment';
+  keySize?: number;
+}
+
+export interface EnrichedFinding extends Finding {
+  nistCategory?: string;
+  quantumImpact?: string;
+  migrationEffort?: 'low' | 'medium' | 'high';
+}
+
+export interface ReadinessScore {
+  overall: number;
+  grade: string;
+  breakdown: {
+    asymmetric: number;
+    symmetric: number;
+    hash: number;
+    protocol: number;
+  };
+}
+
+export interface ScanSummary {
+  critical: number;
+  warning: number;
+  info: number;
+  ok: number;
+}
+
+export interface QuantumThreat {
+  algorithm: string;
+  classicalBreakTime: string;
+  quantumBreakTime: string;
+  quantumAlgorithm: string;
+  speedup: string;
+  qubitsRequired: string;
+  threatLevel: string;
+  citation: string;
 }
 
 export interface ScanReport {
@@ -15,35 +78,264 @@ export interface ScanReport {
   scannedAt: string;
   filesScanned: number;
   findings: Finding[];
-  summary: { critical: number; warning: number; info: number; ok: number };
+  enrichedFindings?: EnrichedFinding[];
+  summary: ScanSummary;
   grade: 'A' | 'B' | 'C' | 'D' | 'F';
+  readiness?: ReadinessScore;
+  usageBreakdown?: { operations: number; imports: number; keyMaterial: number; config: number; references: number; comments: number };
+  quantumSummary?: {
+    weakestLink: QuantumThreat | null;
+    threats: QuantumThreat[];
+  };
+  languageCoverage?: { scanned: number; skipped: number; unsupportedExtensions: { ext: string; count: number }[] };
 }
 
-const BASE = '/api';
+export interface MigrationStep {
+  finding: Finding;
+  priority: 'immediate' | 'short-term' | 'long-term';
+  action: string;
+  codeExample: string;
+  dependencies: string[];
+  effort: 'low' | 'medium' | 'high';
+  notes: string;
+}
 
-export async function scanPath(path: string): Promise<ScanReport> {
-  const res = await fetch(`${BASE}/scan`, {
+export interface MigrationPlan {
+  id: string;
+  generatedAt: string;
+  steps: MigrationStep[];
+  summary: {
+    immediate: number;
+    shortTerm: number;
+    longTerm: number;
+  };
+  estimatedEffort: string;
+}
+
+export interface BenchmarkResult {
+  algorithm: string;
+  operation: string;
+  opsPerSecond: number;
+  avgTimeMs: number;
+  quantumSafe: boolean;
+  category?: string;
+}
+
+export interface BenchmarkReport {
+  id: string;
+  timestamp: string;
+  iterations: number;
+  results: BenchmarkResult[];
+  category?: string;
+}
+
+export interface ProjectWithLatestScan {
+  id: string;
+  name: string;
+  path: string;
+  createdAt: string;
+  latestScan?: {
+    id: string;
+    grade: string;
+    scannedAt: string;
+    summary: ScanSummary;
+  };
+}
+
+// Raw shape from the API (snake_case flat fields)
+interface RawProject {
+  id: string;
+  name: string;
+  path: string;
+  created_at: string;
+  latest_scan_id: string | null;
+  latest_grade: string | null;
+  latest_scanned_at: string | null;
+  latest_critical: number | null;
+  latest_warning: number | null;
+  latest_info: number | null;
+  latest_ok: number | null;
+  latest_files_scanned: number | null;
+  scan_count: number;
+}
+
+function transformProject(raw: RawProject): ProjectWithLatestScan {
+  return {
+    id: raw.id,
+    name: raw.name,
+    path: raw.path,
+    createdAt: raw.created_at,
+    latestScan: raw.latest_grade && raw.latest_scan_id ? {
+      id: raw.latest_scan_id,
+      grade: raw.latest_grade,
+      scannedAt: raw.latest_scanned_at ?? '',
+      summary: {
+        critical: raw.latest_critical ?? 0,
+        warning: raw.latest_warning ?? 0,
+        info: raw.latest_info ?? 0,
+        ok: raw.latest_ok ?? 0,
+      },
+    } : undefined,
+  };
+}
+
+export interface ProjectDetailScan {
+  id: string;
+  scanned_at: string;
+  grade: string;
+  files_scanned: number;
+  critical: number;
+  warning: number;
+  info: number;
+  ok: number;
+}
+
+export interface ProjectDetail {
+  project: {
+    id: string;
+    name: string;
+    path: string;
+    created_at: string;
+  };
+  scans: ProjectDetailScan[];
+}
+
+export interface OverviewStats {
+  totalProjects: number;
+  totalScans: number;
+  totalCritical: number;
+  worstGrade: string;
+}
+
+export interface ComplianceFramework {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  deadline?: string;
+}
+
+export interface ComplianceAssessment {
+  framework: ComplianceFramework;
+  status: 'pass' | 'fail' | 'warning';
+  findings: { finding: Finding; rule: { algorithmPattern: string; status: string }; status: string }[];
+  summary: {
+    total: number;
+    nonCompliant: number;
+    deprecated: number;
+    compliant: number;
+  };
+}
+
+export interface FullComplianceReport {
+  scanId: string;
+  assessments: ComplianceAssessment[];
+  overallStatus: 'pass' | 'fail' | 'warning';
+  blockingCount: number;
+}
+
+export interface BrowseEntry {
+  name: string;
+  type: 'file' | 'directory';
+  size?: number;
+}
+
+export interface BrowseResult {
+  path: string;
+  parent: string | null;
+  entries: BrowseEntry[];
+}
+
+export interface ReferenceData {
+  results: BenchmarkResult[];
+  profiles: Record<string, unknown>;
+}
+
+export interface ScanResponse {
+  project: { id: string; name: string; path: string; created_at: string };
+  scan: { id: string; grade: string; scanned_at: string };
+  report: ScanReport;
+  plan: MigrationPlan;
+}
+
+/* ── Endpoints ── */
+
+export function scanPath(path: string): Promise<ScanResponse> {
+  return request('/scan', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path }),
   });
-  if (!res.ok) throw new Error(`Scan failed: ${res.statusText}`);
-  return res.json();
 }
 
-export async function getScans(): Promise<ScanReport[]> {
-  const res = await fetch(`${BASE}/scans`);
-  if (!res.ok) throw new Error(`Failed to fetch scans: ${res.statusText}`);
-  return res.json();
+export interface ScanDetail {
+  report: ScanReport;
+  plan: MigrationPlan;
 }
 
-export async function getScan(id: string): Promise<ScanReport> {
-  const res = await fetch(`${BASE}/scans/${id}`);
-  if (!res.ok) throw new Error(`Failed to fetch scan: ${res.statusText}`);
-  return res.json();
+export function getScan(id: string): Promise<ScanDetail> {
+  return request(`/scans/${id}`);
 }
 
-export async function healthCheck(): Promise<{ status: string }> {
-  const res = await fetch(`${BASE}/health`);
-  return res.json();
+export function runBenchmark(opts?: { iterations?: number; category?: string }): Promise<BenchmarkReport> {
+  return request('/bench', {
+    method: 'POST',
+    body: JSON.stringify(opts ?? {}),
+  });
+}
+
+export function getBenchmarkHistory(): Promise<BenchmarkReport[]> {
+  return request('/bench/history');
+}
+
+export function getReference(): Promise<ReferenceData> {
+  return request('/reference');
+}
+
+export function getMigrationPlan(path?: string): Promise<MigrationPlan> {
+  return request('/migrate', {
+    method: 'POST',
+    body: JSON.stringify({ path }),
+  });
+}
+
+export function browse(path?: string): Promise<BrowseResult> {
+  const q = path ? `?path=${encodeURIComponent(path)}` : '';
+  return request(`/browse${q}`);
+}
+
+export async function getProjects(): Promise<ProjectWithLatestScan[]> {
+  const raw = await request<RawProject[]>('/projects');
+  return raw.map(transformProject);
+}
+
+export function getProject(id: string): Promise<ProjectDetail> {
+  return request(`/projects/${id}`);
+}
+
+export function deleteProject(id: string): Promise<void> {
+  return request(`/projects/${id}`, { method: 'DELETE' });
+}
+
+export function rescanProject(id: string): Promise<ScanResponse> {
+  return request(`/projects/${id}/scan`, { method: 'POST' });
+}
+
+export function getOverview(): Promise<OverviewStats> {
+  return request('/overview');
+}
+
+export function getComplianceFrameworks(): Promise<ComplianceFramework[]> {
+  return request('/compliance/frameworks');
+}
+
+export function assessCompliance(scanId: string): Promise<FullComplianceReport> {
+  return request(`/compliance/assess/${scanId}`);
+}
+
+export function downloadHtmlReport(scanId: string): string {
+  return `${BASE}/reports/${scanId}/html`;
+}
+
+export function healthCheck(): Promise<{ status: string }> {
+  return request('/health');
 }

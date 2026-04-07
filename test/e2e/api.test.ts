@@ -28,10 +28,12 @@ describe('E2E: API', () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body).toHaveProperty('grade');
-    expect(body).toHaveProperty('findings');
-    expect(body).toHaveProperty('summary');
-    expect(body.summary.critical).toBeGreaterThan(0);
+    expect(body).toHaveProperty('report');
+    expect(body).toHaveProperty('plan');
+    expect(body).toHaveProperty('project');
+    expect(body.report).toHaveProperty('grade');
+    expect(body.report).toHaveProperty('findings');
+    expect(body.report.summary.critical).toBeGreaterThan(0);
   });
 
   it('POST /api/scan returns 400 without path', async () => {
@@ -43,7 +45,7 @@ describe('E2E: API', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('POST /api/scan returns grade A for safe fixtures', async () => {
+  it('POST /api/scan returns grade B for safe fixtures', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/scan',
@@ -51,8 +53,6 @@ describe('E2E: API', () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    // Safe fixtures score B (80/100) under readiness-based grading because
-    // the migration dimension scores 0 (no PQC adoption detected yet).
-    expect(body.grade).toBe('B');
+    expect(body.report.grade).toBe('B');
   });
 });

@@ -1,4 +1,5 @@
 import type { LanguagePatterns, PatternMatch } from '../types.js';
+import { classifyUsage } from '../analyzers/usage.js';
 
 const pythonPatterns: LanguagePatterns = {
   extensions: ['.py'],
@@ -13,7 +14,7 @@ const pythonPatterns: LanguagePatterns = {
     { algorithm: 'Ed25519', regex: /\bEd25519\b/ },
     { algorithm: 'AES-128', regex: /\bAES\b.*\b128\b/ },
     { algorithm: 'AES-256', regex: /\bAES\b.*\b256\b/ },
-    { algorithm: 'DES', regex: /\bDES\b(?!3)(?!ede)/i },
+    { algorithm: 'DES', regex: /\bDES\b(?!3)(?!ede)/ },
     { algorithm: '3DES', regex: /\b(?:3DES|DES3|DESede|TripleDES)\b/i },
     { algorithm: 'MD5', regex: /\bmd5\b/i },
     { algorithm: 'SHA-1', regex: /\bsha[-_]?1\b/i },
@@ -53,7 +54,7 @@ const goPatterns: LanguagePatterns = {
     { algorithm: 'RSA', regex: /\bcrypto\/rsa\b|rsa\.GenerateKey|rsa\.SignPKCS|rsa\.EncryptPKCS/ },
     { algorithm: 'ECDSA', regex: /\bcrypto\/ecdsa\b|ecdsa\.GenerateKey|ecdsa\.Sign/ },
     { algorithm: 'ECDH', regex: /\bcrypto\/ecdh\b|ecdh\./ },
-    { algorithm: 'DSA', regex: /\bcrypto\/dsa\b|dsa\.GenerateKey/ },
+    { algorithm: 'DSA', regex: /\bcrypto\/dsa\b|(?<![a-z])dsa\.GenerateKey/ },
     { algorithm: 'Ed25519', regex: /\bcrypto\/ed25519\b|ed25519\.GenerateKey/ },
     { algorithm: 'DES', regex: /\bcrypto\/des\b|des\.NewCipher/ },
     { algorithm: '3DES', regex: /des\.NewTripleDESCipher/ },
@@ -103,16 +104,115 @@ const javaPatterns: LanguagePatterns = {
   ],
 };
 
+const cPatterns: LanguagePatterns = {
+  extensions: ['.c', '.h', '.cpp', '.cc', '.hpp', '.cxx'],
+  patterns: [
+    // OpenSSL RSA
+    { algorithm: 'RSA', regex: /\bRSA_generate_key|RSA_new\b|EVP_PKEY_RSA\b|RSA_sign\b|RSA_verify\b|RSA_encrypt\b|RSA_decrypt\b/ },
+    { algorithm: 'RSA', regex: /\bRSA_public_encrypt|RSA_private_decrypt/ },
+    // OpenSSL ECDSA / EC
+    { algorithm: 'ECDSA', regex: /\bEC_KEY_generate_key|ECDSA_sign\b|ECDSA_verify\b|EVP_PKEY_EC\b/ },
+    { algorithm: 'ECDH', regex: /\bECDH_compute_key\b/ },
+    // OpenSSL DH
+    { algorithm: 'DH', regex: /\bDH_generate_key|DH_compute_key\b|EVP_PKEY_DH\b/ },
+    // OpenSSL DSA
+    { algorithm: 'DSA', regex: /\b(?<![A-Z])DSA_generate_key|(?<![A-Z])DSA_sign\b|EVP_PKEY_DSA\b/ },
+    // OpenSSL Ed25519
+    { algorithm: 'Ed25519', regex: /\bEVP_PKEY_ED25519\b|ED25519_sign\b/ },
+    // OpenSSL symmetric
+    { algorithm: 'AES-128', regex: /\bEVP_aes_128|AES_set_encrypt_key.*128/ },
+    { algorithm: 'AES-256', regex: /\bEVP_aes_256|AES_set_encrypt_key.*256/ },
+    { algorithm: 'DES', regex: /\bEVP_des_\w|DES_ecb_encrypt\b|DES_set_key\b/ },
+    { algorithm: '3DES', regex: /\bEVP_des_ede3|DES_ede3_cbc_encrypt/ },
+    { algorithm: 'RC4', regex: /\bEVP_rc4\b|RC4_set_key\b/ },
+    // OpenSSL hashing
+    { algorithm: 'MD5', regex: /\bMD5_Init\b|MD5_Update\b|MD5_Final\b|EVP_md5\b/ },
+    { algorithm: 'SHA-1', regex: /\bSHA1_Init\b|SHA1_Update\b|SHA1_Final\b|EVP_sha1\b/ },
+    { algorithm: 'SHA-256', regex: /\bSHA256_Init\b|SHA256_Update\b|EVP_sha256\b/ },
+    { algorithm: 'SHA-512', regex: /\bSHA512_Init\b|SHA512_Update\b|EVP_sha512\b/ },
+    { algorithm: 'SHA-3', regex: /\bEVP_sha3_\d+/ },
+    // TLS
+    { algorithm: 'RSA', regex: /\bSSL_CTX_set_cipher_list.*RSA/ },
+  ],
+};
+
+const rubyPatterns: LanguagePatterns = {
+  extensions: ['.rb'],
+  patterns: [
+    { algorithm: 'RSA', regex: /OpenSSL::PKey::RSA|PKey::RSA\.new|PKey::RSA\.generate/ },
+    { algorithm: 'ECDSA', regex: /OpenSSL::PKey::EC|PKey::EC\.new|PKey::EC\.generate/ },
+    { algorithm: 'DSA', regex: /OpenSSL::PKey::(?<![A-Z])DSA/ },
+    { algorithm: 'DH', regex: /OpenSSL::PKey::DH/ },
+    { algorithm: 'DES', regex: /OpenSSL::Cipher::DES|Cipher\.new\s*\(\s*['"]des/i },
+    { algorithm: '3DES', regex: /Cipher\.new\s*\(\s*['"]des-ede3/i },
+    { algorithm: 'AES-128', regex: /Cipher\.new\s*\(\s*['"]aes-128/i },
+    { algorithm: 'AES-256', regex: /Cipher\.new\s*\(\s*['"]aes-256/i },
+    { algorithm: 'MD5', regex: /Digest::MD5|OpenSSL::Digest::MD5/ },
+    { algorithm: 'SHA-1', regex: /Digest::SHA1|OpenSSL::Digest::SHA1/ },
+    { algorithm: 'SHA-256', regex: /Digest::SHA256|OpenSSL::Digest::SHA256/ },
+    { algorithm: 'SHA-512', regex: /Digest::SHA512|OpenSSL::Digest::SHA512/ },
+    { algorithm: 'RC4', regex: /Cipher\.new\s*\(\s*['"]rc4/i },
+  ],
+};
+
+const phpPatterns: LanguagePatterns = {
+  extensions: ['.php'],
+  patterns: [
+    { algorithm: 'RSA', regex: /OPENSSL_KEYTYPE_RSA|openssl_pkey_new.*rsa/i },
+    { algorithm: 'RSA', regex: /openssl_sign\s*\(|openssl_verify\s*\(|openssl_public_encrypt\s*\(|openssl_private_decrypt\s*\(/ },
+    { algorithm: 'ECDSA', regex: /OPENSSL_KEYTYPE_EC|openssl_pkey_new.*ec/i },
+    { algorithm: 'DES', regex: /openssl_encrypt\s*\([^)]*['"]des['"]/i },
+    { algorithm: '3DES', regex: /openssl_encrypt\s*\([^)]*['"]des-ede3/i },
+    { algorithm: 'AES-128', regex: /openssl_encrypt\s*\([^)]*['"]aes-128/i },
+    { algorithm: 'AES-256', regex: /openssl_encrypt\s*\([^)]*['"]aes-256/i },
+    { algorithm: 'RC4', regex: /openssl_encrypt\s*\([^)]*['"]rc4/i },
+    { algorithm: 'MD5', regex: /\bmd5\s*\(|md5_file\s*\(/ },
+    { algorithm: 'SHA-1', regex: /\bsha1\s*\(|sha1_file\s*\(/ },
+    { algorithm: 'SHA-256', regex: /hash\s*\(\s*['"]sha256['"]/i },
+    { algorithm: 'SHA-512', regex: /hash\s*\(\s*['"]sha512['"]/i },
+    { algorithm: 'SHA-3', regex: /hash\s*\(\s*['"]sha3/i },
+  ],
+};
+
 const allLanguages: LanguagePatterns[] = [
   pythonPatterns,
   jsPatterns,
   goPatterns,
   rustPatterns,
   javaPatterns,
+  cPatterns,
+  rubyPatterns,
+  phpPatterns,
 ];
 
 export function getLanguagePatterns(extension: string): LanguagePatterns | undefined {
   return allLanguages.find((lang) => lang.extensions.includes(extension));
+}
+
+// Key size extraction patterns — match common ways key sizes appear on the same line
+const KEY_SIZE_PATTERNS: RegExp[] = [
+  /modulusLength\s*:\s*(\d{3,5})/,       // JS: modulusLength: 2048
+  /key_size\s*=\s*(\d{3,5})/,            // Python: key_size=2048
+  /GenerateKey\s*\([^,]+,\s*(\d{3,5})/,  // Go: rsa.GenerateKey(rand, 2048)
+  /\.initialize\s*\(\s*(\d{3,5})/,       // Java: kpg.initialize(2048)
+  /RSA_generate_key_ex?\s*\([^,]*,\s*(\d{3,5})/, // C: RSA_generate_key(NULL, 2048, ...)
+  /(\d{3,5})\s*bit/i,                     // General: "2048 bit" or "4096-bit"
+  /key.*?(\d{3,5})/i,                     // Fallback: key...2048
+];
+
+function extractKeySize(line: string, algorithm: string): number | undefined {
+  // Only try for algorithms where key size matters
+  if (!['RSA', 'DSA', 'DH'].includes(algorithm)) return undefined;
+
+  for (const pattern of KEY_SIZE_PATTERNS) {
+    const match = line.match(pattern);
+    if (match) {
+      const size = parseInt(match[1], 10);
+      // Validate: common RSA/DSA/DH key sizes
+      if ([1024, 2048, 3072, 4096, 8192].includes(size)) return size;
+    }
+  }
+  return undefined;
 }
 
 export function scanContent(content: string, extension: string): PatternMatch[] {
@@ -130,10 +230,13 @@ export function scanContent(content: string, extension: string): PatternMatch[] 
         const key = `${pattern.algorithm}:${i + 1}`;
         if (!seen.has(key)) {
           seen.add(key);
+          const keySize = extractKeySize(line, pattern.algorithm);
           matches.push({
-            algorithm: pattern.algorithm,
+            algorithm: keySize ? `${pattern.algorithm}-${keySize}` : pattern.algorithm,
             line: i + 1,
             snippet: line.trim(),
+            usageType: classifyUsage(line, extension),
+            keySize,
           });
         }
       }

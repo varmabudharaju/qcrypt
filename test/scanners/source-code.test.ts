@@ -7,7 +7,7 @@ describe('source code scanner', () => {
       'test/fixtures/vulnerable/crypto_usage.py',
       `from cryptography.hazmat.primitives.asymmetric import rsa\nkey = rsa.generate_private_key(public_exponent=65537, key_size=2048)`
     );
-    expect(findings.some((f) => f.algorithm === 'RSA' && f.risk === 'CRITICAL')).toBe(true);
+    expect(findings.some((f) => f.algorithm.startsWith('RSA') && f.risk === 'CRITICAL')).toBe(true);
     expect(findings[0].explanation.length).toBeGreaterThan(0);
     expect(findings[0].replacement.length).toBeGreaterThan(0);
   });

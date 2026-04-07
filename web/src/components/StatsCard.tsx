@@ -1,22 +1,23 @@
 interface StatsCardProps {
   label: string;
   value: string | number;
-  trend?: string;
-  color?: 'default' | 'red' | 'green';
+  subtitle?: string;
+  accentColor?: 'neon' | 'error' | 'warning' | 'default';
 }
 
-const colorMap = {
-  default: 'text-slate-800 dark:text-[#e0e0e0]',
-  red: 'text-red-500',
-  green: 'text-green-500 dark:text-[#00FF41]',
+const accentMap: Record<string, string> = {
+  neon: 'text-primary-container text-glow-sm',
+  error: 'text-error',
+  warning: 'text-tertiary-fixed-dim',
+  default: 'text-primary',
 };
 
-export function StatsCard({ label, value, trend, color = 'default' }: StatsCardProps) {
+export function StatsCard({ label, value, subtitle, accentColor = 'default' }: StatsCardProps) {
   return (
-    <div className="bg-white dark:bg-[#111111] rounded-xl border border-slate-200 dark:border-[#1a1a1a] p-5">
-      <p className="text-sm text-slate-500 dark:text-[#666666] mb-1">{label}</p>
-      <p className={`text-3xl font-bold ${colorMap[color]}`}>{value}</p>
-      {trend && <p className="text-xs text-slate-400 dark:text-[#666666] mt-1">{trend}</p>}
+    <div className="bg-surface-container-low p-5">
+      <p className="font-mono text-[10px] uppercase text-on-surface-variant tracking-wider mb-2">{label}</p>
+      <p className={`stat-value text-3xl ${accentMap[accentColor]}`}>{value}</p>
+      {subtitle && <p className="font-mono text-xs text-on-surface-variant mt-1">{subtitle}</p>}
     </div>
   );
 }

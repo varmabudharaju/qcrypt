@@ -1,7 +1,8 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, lstatSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import type { Finding, ScanReport } from './types.js';
+import type { Finding, ScanReport, UsageType, QuantumSummary, QuantumThreatEntry } from './types.js';
+import { getQuantumEstimate, getWeakestThreat } from './reference/quantum-estimates.js';
 import { scanSourceFile } from './scanners/source-code.js';
 import { scanCertificateFile } from './scanners/certificates.js';
 import { scanConfigFile } from './scanners/config-files.js';
@@ -10,6 +11,7 @@ import { getLanguagePatterns } from './rules/patterns.js';
 import { enrichFindings } from './analyzers/context.js';
 import { computeReadinessScore } from './analyzers/readiness.js';
 import { parseQcryptConfig, applyConfigOverrides } from './config/qcrypt-config.js';
+import { isGitHubUrl, scanGitHubRepo } from './github/scanner.js';
 
 const CERT_EXTENSIONS = new Set(['.pem', '.crt', '.cer', '.key', '.pub']);
 const CONFIG_BASENAMES = new Set([
@@ -24,23 +26,36 @@ const DEP_BASENAMES = new Set([
 ]);
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '__pycache__', 'vendor', 'target']);
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_DEPTH = 50;
+
 function discoverFiles(dir: string): string[] {
   const files: string[] = [];
 
-  function walk(currentDir: string) {
+  function walk(currentDir: string, depth: number) {
+    if (depth > MAX_DEPTH) return;
     const entries = readdirSync(currentDir, { withFileTypes: true });
     for (const entry of entries) {
       if (SKIP_DIRS.has(entry.name)) continue;
       const fullPath = path.join(currentDir, entry.name);
+      // Skip symlinks to prevent traversal and loops
+      if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) {
-        walk(fullPath);
+        walk(fullPath, depth + 1);
       } else if (entry.isFile()) {
-        files.push(fullPath);
+        try {
+          const stat = statSync(fullPath);
+          if (stat.size <= MAX_FILE_SIZE) {
+            files.push(fullPath);
+          }
+        } catch {
+          continue;
+        }
       }
     }
   }
 
-  walk(dir);
+  walk(dir, 0);
   return files;
 }
 
@@ -56,6 +71,58 @@ function classifyFile(filePath: string): 'source' | 'cert' | 'config' | 'dep' | 
   return 'skip';
 }
 
+export function computeUsageBreakdown(findings: Finding[]) {
+  const counts = { operations: 0, imports: 0, keyMaterial: 0, config: 0, references: 0, comments: 0 };
+  const typeMap: Record<UsageType, keyof typeof counts> = {
+    'operation': 'operations',
+    'import': 'imports',
+    'key-material': 'keyMaterial',
+    'config': 'config',
+    'reference': 'references',
+    'comment': 'comments',
+  };
+  for (const f of findings) {
+    counts[typeMap[f.usageType]]++;
+  }
+  return counts;
+}
+
+export function computeQuantumSummary(findings: Finding[]): QuantumSummary {
+  const uniqueAlgos = [...new Set(findings.map((f) => f.algorithm))];
+  const threats: QuantumThreatEntry[] = [];
+  const seenEstimates = new Set<string>();
+
+  for (const algo of uniqueAlgos) {
+    const est = getQuantumEstimate(algo);
+    if (!est || seenEstimates.has(est.algorithm)) continue;
+    seenEstimates.add(est.algorithm);
+    threats.push({
+      algorithm: est.algorithm,
+      classicalBreakTime: est.classicalBreakTime,
+      quantumBreakTime: est.quantumBreakTime,
+      quantumAlgorithm: est.quantumAlgorithm,
+      speedup: est.speedup,
+      qubitsRequired: est.qubitsRequired,
+      threatLevel: est.threatLevel,
+      citation: est.citation,
+    });
+  }
+
+  const weakest = getWeakestThreat(uniqueAlgos);
+  const weakestLink = weakest ? {
+    algorithm: weakest.algorithm,
+    classicalBreakTime: weakest.classicalBreakTime,
+    quantumBreakTime: weakest.quantumBreakTime,
+    quantumAlgorithm: weakest.quantumAlgorithm,
+    speedup: weakest.speedup,
+    qubitsRequired: weakest.qubitsRequired,
+    threatLevel: weakest.threatLevel,
+    citation: weakest.citation,
+  } : null;
+
+  return { weakestLink, threats };
+}
+
 export function gradeFromScore(overall: number): 'A' | 'B' | 'C' | 'D' | 'F' {
   if (overall >= 90) return 'A';
   if (overall >= 70) return 'B';
@@ -65,6 +132,11 @@ export function gradeFromScore(overall: number): 'A' | 'B' | 'C' | 'D' | 'F' {
 }
 
 export async function scan(targetPath: string): Promise<ScanReport> {
+  // GitHub URL support
+  if (isGitHubUrl(targetPath)) {
+    return scanGitHubRepo(targetPath, process.env.GITHUB_TOKEN);
+  }
+
   const resolvedPath = path.resolve(targetPath);
   const stat = statSync(resolvedPath);
 
@@ -77,9 +149,20 @@ export async function scan(targetPath: string): Promise<ScanReport> {
 
   const allFindings: Finding[] = [];
 
+  // Track language coverage
+  const extCounts: Record<string, number> = {};
+  let scannedCount = 0;
+  let skippedCount = 0;
+
   for (const file of files) {
     const type = classifyFile(file);
-    if (type === 'skip') continue;
+    if (type === 'skip') {
+      skippedCount++;
+      const ext = path.extname(file).toLowerCase();
+      if (ext) extCounts[ext] = (extCounts[ext] ?? 0) + 1;
+      continue;
+    }
+    scannedCount++;
 
     let content: string;
     try {
@@ -88,7 +171,7 @@ export async function scan(targetPath: string): Promise<ScanReport> {
       continue;
     }
 
-    const relativePath = path.relative(resolvedPath, file);
+    const relativePath = path.relative(resolvedPath, file) || path.basename(file);
     let findings: Finding[];
 
     switch (type) {
@@ -148,7 +231,18 @@ export async function scan(targetPath: string): Promise<ScanReport> {
     findings: allFindings,
     enrichedFindings,
     summary,
+    usageBreakdown: computeUsageBreakdown(allFindings),
     grade,
     readiness,
+    quantumSummary: computeQuantumSummary(allFindings),
+    languageCoverage: skippedCount > 0 ? {
+      scanned: scannedCount,
+      skipped: skippedCount,
+      unsupportedExtensions: Object.entries(extCounts)
+        .filter(([ext]) => ['.c', '.h', '.cpp', '.cc', '.hpp', '.rb', '.php', '.swift', '.m', '.mm', '.cs', '.scala', '.zig'].includes(ext))
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([ext, count]) => ({ ext, count })),
+    } : undefined,
   };
 }

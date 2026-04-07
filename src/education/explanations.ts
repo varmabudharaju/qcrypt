@@ -116,5 +116,5 @@ const fallback: Explanation = {
 };
 
 export function getExplanation(algorithm: string): Explanation {
-  return explanations[algorithm] ?? fallback;
+  return explanations[algorithm] ?? explanations[algorithm.replace(/-\d+$/, '')] ?? fallback;
 }
