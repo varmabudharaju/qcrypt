@@ -307,11 +307,41 @@ export function getReference(): Promise<ReferenceData> {
   return request('/reference');
 }
 
-export function getMigrationPlan(path?: string): Promise<MigrationPlan> {
-  return request('/migrate', {
+export async function getMigrationPlan(path?: string): Promise<MigrationPlan> {
+  const result = await request<MigrationPlan & { status?: string; scanId?: string }>('/migrate', {
     method: 'POST',
     body: JSON.stringify({ path }),
   });
+
+  // If the backend triggered an async scan, poll until the plan is ready
+  if (result.status === 'scanning' && result.scanId) {
+    const scanId = result.scanId;
+    return new Promise((resolve, reject) => {
+      async function poll() {
+        try {
+          const scan = await request<{ status?: string; report?: unknown; plan?: MigrationPlan }>(`/scans/${scanId}`);
+          if (scan.status === 'scanning') {
+            setTimeout(poll, 3000);
+            return;
+          }
+          if (scan.status === 'failed') {
+            reject(new Error('Scan failed. The repository may be too large, private, or unavailable.'));
+            return;
+          }
+          if (scan.plan) {
+            resolve(scan.plan);
+          } else {
+            reject(new Error('Migration plan not available'));
+          }
+        } catch (err) {
+          reject(err);
+        }
+      }
+      setTimeout(poll, 3000);
+    });
+  }
+
+  return result;
 }
 
 export function browse(path?: string): Promise<BrowseResult> {
