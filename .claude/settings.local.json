@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(xxd -l 16 \"/Users/varma/Desktop/Screenshot 2026-04-07 at 3.21.25 PM.png\")"
-    ]
-  }
-}
