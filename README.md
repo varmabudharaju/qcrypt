@@ -14,29 +14,26 @@ qcrypt finds it, grades it, and tells you how long you have.
 
 ## Quick Start
 
-```bash
-npx qcrypt-scan https://github.com/nodejs/node
-```
+**No install — hosted:** paste any public GitHub URL at [qcrypt.dev](https://qcrypt.dev).
 
-That's it. Scans 35,000 files, shows you every quantum-vulnerable algorithm, and grades the project.
+**Run locally (scan private code without it leaving your machine):**
 
 ```bash
-# Scan a local project
-npx qcrypt-scan /path/to/project
+git clone https://github.com/varmabudharaju/qcrypt.git
+cd qcrypt
+npm install         # auto-builds via the prepare hook
+npm link            # puts `qcrypt-scan` on your PATH (optional)
 
-# JSON output for scripting
-npx qcrypt-scan . --json
-
-# Start the web dashboard
-npx qcrypt-scan --serve
+qcrypt-scan .                                        # scan current directory
+qcrypt-scan /path/to/project                         # scan a local project
+qcrypt-scan https://github.com/nodejs/node           # scan a public GitHub repo
+qcrypt-scan . --json                                 # JSON for scripting
+qcrypt-scan --serve                                  # web dashboard on :3100
 ```
 
-### pip
+If you skip `npm link`, substitute `node dist/cli.js` for `qcrypt-scan` above.
 
-```bash
-pip install qcrypt-scan
-qcrypt-scan https://github.com/org/repo
-```
+> `npx qcrypt-scan` and `pip install qcrypt-scan` are coming — not on npm/PyPI yet. Until then, use the clone path above or the hosted site.
 
 ## What You Get
 
