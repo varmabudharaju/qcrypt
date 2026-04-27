@@ -229,6 +229,17 @@ export function createServer(): FastifyInstance {
       }
       return reply.sendFile('index.html');
     });
+  } else {
+    app.setNotFoundHandler(async (request, reply) => {
+      if (request.url.startsWith('/api/')) {
+        return reply.status(404).send({ error: 'Not found' });
+      }
+      return reply.status(503).type('text/plain').send(
+        'qcrypt web UI is not built.\n\n' +
+        'Run `npm run build:web` from the repo root, then restart `--serve`.\n' +
+        'API endpoints under /api/ are still available.\n'
+      );
+    });
   }
 
   return app;

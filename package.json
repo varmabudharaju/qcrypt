@@ -9,11 +9,11 @@
   },
   "scripts": {
     "build": "tsc",
-    "prepare": "tsc",
+    "prepare": "tsc && cd web && npm install --no-audit --no-fund && npm run build",
     "dev": "tsx src/cli.ts",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
-    "build:web": "cd web && npm run build",
+    "build:web": "cd web && npm install --no-audit --no-fund && npm run build",
     "serve": "tsx src/api/server.ts"
   },
   "keywords": [
