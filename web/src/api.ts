@@ -6,6 +6,11 @@
 const CLOUD_API = import.meta.env.VITE_API_URL || '';
 const BASE = CLOUD_API ? `${CLOUD_API}/api` : '/api';
 
+// True when the bundle is served by the local Fastify server (`qcrypt-scan --serve`),
+// false when served from the cloud (qcrypt.dev). Lets the UI offer local-path scanning
+// only where the backend can actually read the filesystem.
+export const IS_LOCAL_SERVER = !CLOUD_API;
+
 // Session ID: unique per browser tab, cleared when the tab closes
 function getSessionId(): string {
   let id = sessionStorage.getItem('qcrypt-session-id');

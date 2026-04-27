@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { scanPath, getOverview, getProjects } from '../api';
+import { scanPath, getOverview, getProjects, IS_LOCAL_SERVER } from '../api';
 import type { OverviewStats, ProjectWithLatestScan } from '../api';
 import { StatsCard } from '../components/StatsCard';
 
@@ -89,7 +89,9 @@ export function Dashboard() {
           INITIATE QUANTUM AUDIT
         </h1>
         <p className="text-on-surface-variant mt-2 max-w-xl">
-          Scan any repository for quantum-vulnerable cryptographic primitives. Get remediation plans aligned with NIST PQC standards.
+          {IS_LOCAL_SERVER
+            ? 'Scan any GitHub repository — or a folder on this machine — for quantum-vulnerable cryptographic primitives. Get remediation plans aligned with NIST PQC standards.'
+            : 'Scan any GitHub repository for quantum-vulnerable cryptographic primitives. Get remediation plans aligned with NIST PQC standards.'}
         </p>
       </div>
 
@@ -101,7 +103,7 @@ export function Dashboard() {
             value={path}
             onChange={(e) => setPath(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleScan()}
-            placeholder="https://github.com/org/repo"
+            placeholder={IS_LOCAL_SERVER ? 'https://github.com/org/repo  or  /path/to/local/folder' : 'https://github.com/org/repo'}
             disabled={scanning}
             className="flex-1 px-4 py-3 bg-surface-container-lowest text-primary font-mono text-sm placeholder-on-surface-variant/50 focus:outline-none focus:ring-1 focus:ring-primary-container/50 border-none"
           />
@@ -117,7 +119,7 @@ export function Dashboard() {
           <p className="mt-3 font-mono text-xs text-error">{error}</p>
         )}
         <p className="mt-2 font-mono text-[10px] text-on-surface-variant/60 tracking-wider">
-          PASTE ANY PUBLIC GITHUB REPO URL
+          {IS_LOCAL_SERVER ? 'PASTE A GITHUB URL OR ABSOLUTE LOCAL PATH (e.g. /Users/you/myproject)' : 'PASTE ANY PUBLIC GITHUB REPO URL'}
         </p>
       </div>
 
