@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { scanPath, getOverview, getProjects, IS_LOCAL_SERVER } from '../api';
 import type { OverviewStats, ProjectWithLatestScan } from '../api';
 import { StatsCard } from '../components/StatsCard';
+import { FolderPicker } from '../components/FolderPicker';
 
 const LOG_LINES = [
   '> QUANTUM_AUDIT_ENGINE initialized',
@@ -33,6 +34,7 @@ export function Dashboard() {
   const [overview, setOverview] = useState<OverviewStats | null>(null);
   const [projects, setProjects] = useState<ProjectWithLatestScan[]>([]);
   const [logLines, setLogLines] = useState<string[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     getOverview().then(setOverview).catch((e) => setError(e instanceof Error ? e.message : 'Failed to load overview'));
@@ -56,13 +58,15 @@ export function Dashboard() {
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
-  const handleScan = useCallback(async () => {
-    if (!path.trim()) return;
+  const runScan = useCallback(async (target: string) => {
+    const trimmed = target.trim();
+    if (!trimmed) return;
+    setPath(trimmed);
     setScanning(true);
     setError('');
-    setLogLines((prev) => [...prev, `> Initiating scan: ${path.trim()}`]);
+    setLogLines((prev) => [...prev, `> Initiating scan: ${trimmed}`]);
     try {
-      const res = await scanPath(path.trim());
+      const res = await scanPath(trimmed);
       setLogLines((prev) => [...prev, '> Scan complete. Rendering results...']);
       navigate(`/scans/${res.scan.id}`);
     } catch (err) {
@@ -72,7 +76,9 @@ export function Dashboard() {
     } finally {
       setScanning(false);
     }
-  }, [path, navigate]);
+  }, [navigate]);
+
+  const handleScan = useCallback(() => runScan(path), [runScan, path]);
 
   const threatLevel = overview
     ? Math.min(100, Math.round((overview.totalCritical / Math.max(overview.totalScans, 1)) * 100))
@@ -107,6 +113,16 @@ export function Dashboard() {
             disabled={scanning}
             className="flex-1 px-4 py-3 bg-surface-container-lowest text-primary font-mono text-sm placeholder-on-surface-variant/50 focus:outline-none focus:ring-1 focus:ring-primary-container/50 border-none"
           />
+          {IS_LOCAL_SERVER && (
+            <button
+              onClick={() => setPickerOpen(true)}
+              disabled={scanning}
+              title="Browse local folders"
+              className="px-4 py-3 bg-surface-container-lowest text-primary font-mono text-xs hover:bg-surface-container-high border-none"
+            >
+              📁 BROWSE
+            </button>
+          )}
           <button
             onClick={handleScan}
             disabled={scanning || !path.trim()}
@@ -119,9 +135,20 @@ export function Dashboard() {
           <p className="mt-3 font-mono text-xs text-error">{error}</p>
         )}
         <p className="mt-2 font-mono text-[10px] text-on-surface-variant/60 tracking-wider">
-          {IS_LOCAL_SERVER ? 'PASTE A GITHUB URL OR ABSOLUTE LOCAL PATH (e.g. /Users/you/myproject)' : 'PASTE ANY PUBLIC GITHUB REPO URL'}
+          {IS_LOCAL_SERVER ? 'PASTE A GITHUB URL, AN ABSOLUTE LOCAL PATH, OR USE BROWSE' : 'PASTE ANY PUBLIC GITHUB REPO URL'}
         </p>
       </div>
+
+      {IS_LOCAL_SERVER && (
+        <FolderPicker
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onSelect={(selectedPath) => {
+            setPickerOpen(false);
+            runScan(selectedPath);
+          }}
+        />
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-3 gap-px bg-surface-container-high">

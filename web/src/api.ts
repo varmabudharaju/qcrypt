@@ -253,16 +253,12 @@ export interface FullComplianceReport {
   blockingCount: number;
 }
 
-export interface BrowseEntry {
-  name: string;
-  type: 'file' | 'directory';
-  size?: number;
-}
-
+// /api/browse only ever returns directory names (it filters out files,
+// hidden entries, node_modules, dist), so entries is a flat list of names.
 export interface BrowseResult {
   path: string;
   parent: string | null;
-  entries: BrowseEntry[];
+  entries: string[];
 }
 
 export interface ReferenceData {
