@@ -153,7 +153,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: varmabudharaju/qcrypt@main
+      - uses: varmabudharaju/qcrypt@v1
         with:
           fail-on: critical          # also accepts: warning, info, off
 ```
